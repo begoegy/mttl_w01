@@ -208,3 +208,13 @@ V2 artifact (research only, not production catalog):
 - focused builder tests: `2/2` pass
 
 The three task-create instructions changed by V1 are byte-for-byte stock in V2. No physical device has received V2 yet.
+
+## Physical remote canary success — neutral v2 1.0.70 — 2026-10-15
+
+Canary `88D039394D73` (`New`) was updated remotely from `0.1.54-1.0.66` to lab `0.1.54-1.0.70` using the direct production-VPS OTA route. The target was restricted by manifest to this exact MAC and source firmware; stock `1.0.66` was present as the rollback package.
+
+Job `a50836008533a54f` transferred the complete `327944 / 327944` bytes, rebooted the strip, received a fresh boot identity `0.1.54-1.0.70`, and passed automatic diagnostics. Post-update state was online with four outlet reports preserved (1 off; 2/3/4 on), voltage `203.0 V`, and RSSI `-52 dBm`. The job finished `succeeded / verified`; no rollback was needed.
+
+A server-side packet capture recorded the direct canary flows to production TCP `80` for OTA and TCP `10086` for the device protocol. This proves the direct remote OTA path and reconnect to SFN. It does **not** by itself observe arbitrary traffic leaving the customer's LAN toward third-party destinations; the no-vendor-cloud claim still rests on the exact static hostname replacement to `127.0.0.1` plus a future LAN-side capture if definitive runtime egress proof is required.
+
+This is one physical canary only. Do not generalize compatibility to other hardware/source firmware families until each source family has its own controlled canary.
