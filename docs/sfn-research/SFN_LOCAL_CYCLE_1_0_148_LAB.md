@@ -1,7 +1,7 @@
 # SFN Neutral 1.0.148 local-cycle lab candidate
 
 Date: 2026-10-15
-Status: **LAB ONLY — NOT PHYSICALLY FLASHED, NOT PRODUCTION APPROVED**
+Status: **OWNER CANARY PHYSICALLY PROVEN — FLEET ROLLOUT NOT YET APPROVED**
 
 ## Purpose
 
@@ -99,3 +99,11 @@ No customer/fleet flash is authorized by this document.
 - task sequence -> 100 ms guard, relay OFF, 30 s local delay, relay ON, self-delete.
 
 This strengthens pre-flash QA but is not a substitute for a physical canary.
+
+## Physical canary result — 2026-10-16
+
+The owner canary `88D039FA2729` (`الصاله`) was successfully updated from SFN Neutral `0.1.55-1.0.147` to exact `0.1.55-1.0.148`. OTA transfer completed at `327944/327944` bytes and the update manager verified the reconnect. All four outlets returned ON with normal telemetry.
+
+A 60-second cycle was armed on outlet 1. The ACK was observed first, then the owner disconnected the router so the strip lost its server path. Server polling timed out while the strip was unreachable. The owner physically observed the test load regain power after the minute with the router still disconnected. Once the router was restored, the strip reconnected on `0.1.55-1.0.148`.
+
+Therefore the local-cycle behavior is physically proven for this canary. The RAM limitation remains unchanged: it survives network loss, not loss of power to the strip itself.
