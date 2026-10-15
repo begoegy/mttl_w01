@@ -191,3 +191,20 @@ Post-failure evidence is safe: the canary stayed online on stock `0.1.54-1.0.66`
 This invalidates any assumption that the already-proven remote runtime path `1.0.38 -> stock 1.0.66` automatically proves `stock 1.0.66 -> custom neutral image`. Public Direct-local documentation uses either the stock MEF OTA flow on a redirected lab network or the setup-AP OTA tool (`192.168.1.1:30300`) to install the patched custom firmware from stock `1.0.66`.
 
 **Gate:** do not re-enable the neutral lab package in production until one of those `1.0.66` installation paths is reproduced on the physical canary with packet/transfer evidence. The lab binary remains research-only.
+
+## Remote-path follow-up — neutral V2
+
+The failed `1.0.69` transfer does not prove that `up:ota` rejects custom firmware. The public MatterBridge OTA tool explicitly supports installing custom firmware and uses the same device command `up:ota:<IPv4>`, waits for `up:ota:ota_ok`, then serves `/ota.bin` with `Content-Length`, `Connection: close`, 512-byte writes and 5 ms pacing. The important environmental difference is that the reference tool is normally used directly on the strip's setup LAN, while the failed SFN attempt fetched through the public edge VPS, Caddy, WireGuard and the production backend.
+
+To remove that transport difference, production OTA delivery was moved to the main SFN Power VPS public IPv4 `169.58.193.85`: the strip now fetches `http://169.58.193.85/ota.bin`, main-host Caddy immediately proxies to the local protected OTA backend with `flush_interval -1`. The old edge/VPN path remains unused for new jobs. No firmware job was started while making this routing change; the canary remained connected on stock `0.1.54-1.0.66`.
+
+A second LAB-ONLY image was also built without NOPing any RTOS task creation. `1.0.70` V2 follows the already-public Direct-local patching pattern but uses loopback (`127.0.0.1`) for the four known LG U+ service destinations instead of replacing task startup code. The normal controller address remains provisioned independently through `up:ip`.
+
+V2 artifact (research only, not production catalog):
+- file: `/srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.70-neutral-lab-v2.fwr`
+- size: `327944`
+- SHA-256: `0cbf05da978ef3985439e9a1d40e71a8bcd5dea7988a800217615873783472a2`
+- decoded checksum: `0x01f88a8b`
+- focused builder tests: `2/2` pass
+
+The three task-create instructions changed by V1 are byte-for-byte stock in V2. No physical device has received V2 yet.
