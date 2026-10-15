@@ -15,6 +15,9 @@ EXPECTED_SIZE = 327944
 EXPECTED_SHA256 = "d780b578af69d52f3a05191a8e7d91a20e05085a912722327481cd5663682c04"
 XOR_KEY = bytes.fromhex("3f5a27e8d8fb85f9bd4d51196c4f5159")
 NOP32 = bytes.fromhex("00bf00bf")
+LAB_VERSION_OFFSET = 0x18E64
+LAB_VERSION_SOURCE = b"1.0.66"
+LAB_VERSION = b"1.0.69"
 PATCHES = (
     (0x3A3E, bytes.fromhex("06f01bfb"), "disable check_ota_ssl_task creation"),
     (0x197A4, bytes.fromhex("f0f768fc"), "disable ota_task / ota_ssl_task creation"),
@@ -72,6 +75,11 @@ def validate_source(raw: bytes) -> bytearray:
             raise SystemExit(
                 f"REFUSE: {label}: decoded bytes at 0x{offset:x} are {actual.hex()}, expected {expected.hex()}"
             )
+    actual_version = bytes(decoded[LAB_VERSION_OFFSET:LAB_VERSION_OFFSET + len(LAB_VERSION_SOURCE)])
+    if actual_version != LAB_VERSION_SOURCE:
+        raise SystemExit(
+            f"REFUSE: version bytes at 0x{LAB_VERSION_OFFSET:x} are {actual_version!r}, expected {LAB_VERSION_SOURCE!r}"
+        )
     return decoded
 
 
@@ -82,17 +90,22 @@ def build(source: Path, output: Path) -> dict[str, object]:
 
     for offset, _expected, _label in PATCHES:
         patched[offset:offset + 4] = NOP32
+    patched[LAB_VERSION_OFFSET:LAB_VERSION_OFFSET + len(LAB_VERSION)] = LAB_VERSION
 
     new_checksum = checksum(patched)
     struct.pack_into("<I", patched, len(patched) - 4, new_checksum)
 
-    missing = [m.decode("ascii") for m in PRESERVED_MARKERS if m not in patched]
+    output_markers = tuple(m for m in PRESERVED_MARKERS if m != LAB_VERSION_SOURCE) + (LAB_VERSION,)
+    missing = [m.decode("ascii") for m in output_markers if m not in patched]
     if missing:
         raise SystemExit("REFUSE: patched markers missing: " + ", ".join(missing))
+    if LAB_VERSION_SOURCE in patched:
+        raise SystemExit("REFUSE: stock version marker still present after lab identity patch")
 
     allowed = set(range(len(patched) - 4, len(patched)))
     for offset, _expected, _label in PATCHES:
         allowed.update(range(offset, offset + 4))
+    allowed.update(range(LAB_VERSION_OFFSET, LAB_VERSION_OFFSET + len(LAB_VERSION)))
     changed = [i for i, (a, b) in enumerate(zip(original, patched)) if a != b]
     unexpected = [i for i in changed if i not in allowed]
     if unexpected:
@@ -122,6 +135,7 @@ def build(source: Path, output: Path) -> dict[str, object]:
         "internal_checksum": f"{new_checksum:08x}",
         "decoded_changed_bytes": len(changed),
         "patch_offsets": [f"0x{o:x}" for o, _, _ in PATCHES],
+        "reported_lab_version": LAB_VERSION.decode("ascii"),
     }
 
 

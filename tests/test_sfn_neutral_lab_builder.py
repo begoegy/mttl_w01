@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "work/firmware/1.0.66/comMTTL-W01_1.0.66.fwr"
 TOOL = ROOT / "tools/sfn_build_neutral_lab_1_0_66.py"
-EXPECTED_OUTPUT_SHA256 = "653ee4dfb9897964e251773dc7e0bafaf14212066472fc9fd551ca553a754484"
+EXPECTED_OUTPUT_SHA256 = "a1f7db34b32e171b529029276e8aa7488cf9307e5567da48c3d7af5bac871cb3"
 
 spec = importlib.util.spec_from_file_location("neutral_builder", TOOL)
 builder = importlib.util.module_from_spec(spec)
@@ -30,12 +30,20 @@ class NeutralLabBuilderTest(unittest.TestCase):
             for offset, _, _ in builder.PATCHES:
                 allowed.update(range(offset, offset + 4))
                 self.assertEqual(bytes(patched[offset:offset + 4]), builder.NOP32)
+            allowed.update(range(builder.LAB_VERSION_OFFSET, builder.LAB_VERSION_OFFSET + len(builder.LAB_VERSION)))
+            self.assertEqual(
+                bytes(patched[builder.LAB_VERSION_OFFSET:builder.LAB_VERSION_OFFSET + len(builder.LAB_VERSION)]),
+                builder.LAB_VERSION,
+            )
+            self.assertNotIn(builder.LAB_VERSION_SOURCE, patched)
             self.assertTrue(changed <= allowed)
 
             stored = struct.unpack_from("<I", patched, len(patched) - 4)[0]
             self.assertEqual(stored, builder.checksum(patched))
             for marker in builder.PRESERVED_MARKERS:
-                self.assertIn(marker, patched)
+                if marker != builder.LAB_VERSION_SOURCE:
+                    self.assertIn(marker, patched)
+            self.assertIn(builder.LAB_VERSION, patched)
 
     def test_refuses_any_non_pinned_source(self):
         with tempfile.TemporaryDirectory() as td:

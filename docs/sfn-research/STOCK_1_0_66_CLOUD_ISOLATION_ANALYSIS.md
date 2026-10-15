@@ -155,21 +155,24 @@ The research builder is `tools/sfn_build_neutral_lab_1_0_66.py`. It refuses any 
 
 Research output (not in the production catalog):
 
-- path: `/srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.66-neutral-lab.fwr`
+- path: `/srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.69-neutral-lab.fwr`
 - size: `327944` bytes
-- SHA-256: `653ee4dfb9897964e251773dc7e0bafaf14212066472fc9fd551ca553a754484`
-- decoded additive checksum: `0x01f89f38`
+- SHA-256: `a1f7db34b32e171b529029276e8aa7488cf9307e5567da48c3d7af5bac871cb3`
+- decoded additive checksum: `0x01f89f3b`
+
+The lab image reports firmware `1.0.69` instead of `1.0.66`. This is a lab-only identity marker, not a production release-number commitment. The public Direct-local patch already demonstrates that the six-byte version field at `0x18e64` can be changed while preserving the image layout.
 
 Decoded byte comparison against the pinned stock image found changes only at:
 
 - `0x3a3e..0x3a41` — four bytes, `check_ota_ssl_task` task-create BL -> two NOPs
+- `0x18e69` — one byte, final version digit `6` -> `9` (`1.0.66` -> `1.0.69`)
 - `0x197a4..0x197a7` — four bytes, shared `ota_task` / `ota_ssl_task` task-create BL -> two NOPs
 - `0x1d6c2..0x1d6c5` — four bytes, `LGtonlyoneM2MTask` task-create BL -> two NOPs
 - checksum bytes `0x50104..0x50105` — the upper two checksum bytes are unchanged, so only two checksum bytes differ physically
 
 The three patch locations disassemble as exactly `nop; nop` in the candidate. Direct calls to the RTOS task-create routine fall from 11 to 8; the remaining fixed-name tasks are normal RTOS/device tasks (`IDLE`, timer service, metering, Wi-Fi, BSP and log UART) plus two generic wrappers, and were not modified.
 
-The setup/controller markers `up:ip:ip_ok`, `up:connect:connect_ok`, `up:ota:ota_ok`, `up:reboot_ok`, `wifirssi`, `up:query:%d`, `MTTL-W01`, and `LGU+-TAP-HW002` remain byte-for-byte present.
+The setup/controller markers `up:ip:ip_ok`, `up:connect:connect_ok`, `up:ota:ota_ok`, `up:reboot_ok`, `wifirssi`, `up:query:%d`, `MTTL-W01`, and `LGU+-TAP-HW002` remain byte-for-byte present. The stock version marker is intentionally replaced with the lab identity `1.0.69`.
 
 The vendor task entry pointers were also checked in the pinned stock image. Each of the four relevant task entry pointers (`check_ota_ssl_task`, `ota_task`, `ota_ssl_task`, `LGtonlyoneM2MTask`) has one literal pointer occurrence used by its mapped initializer. This further reduces the chance of an undiscovered second direct creation path, but it is still not a substitute for a physical network capture.
 
