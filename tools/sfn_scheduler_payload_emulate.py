@@ -34,6 +34,8 @@ def setup(flash=None):
         if even==EXIT: uc.emu_stop(); return
         name=STUBS.get(even)
         if not name:return
+        sp=uc.reg_read(UC_ARM_REG_SP)
+        if sp & 7: raise AssertionError(f'unaligned stack at {name}: {sp:#x}')
         if name=='colon':
             start=uc.reg_read(UC_ARM_REG_R5); data=cstr(uc,start); pos=data.find(b':'); uc.reg_write(UC_ARM_REG_R0,0 if pos<0 else start+pos); ret(uc)
         elif name=='atoi':

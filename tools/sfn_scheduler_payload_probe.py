@@ -13,17 +13,17 @@ get_data:
  ldr r0, [r0]
  bx lr
 next_int:
- push {{lr}}
+ push {{r3,lr}}
  bl 0x10016bec
  cbz r0, ni_bad
  adds r5, r0, #1
  mov r0, r5
  bl 0x10015498
- pop {{pc}}
+ pop {{r3,pc}}
 ni_bad:
  movw r0, #0
  movt r0, #0x8000
- pop {{pc}}
+ pop {{r3,pc}}
 validate:
  push {{r4,r5,r6,lr}}
  mov r4,r0
@@ -61,7 +61,7 @@ v_bad:
  movs r0,#0
  pop {{r4,r5,r6,pc}}
 relay:
- push {{r4,r5,lr}}
+ push {{r3,r4,r5,lr}}
  mov r4,r0
  mov r5,r1
  cmp r4,#0
@@ -77,7 +77,7 @@ rel_all:
  adds r4,#1
  cmp r4,#5
  blt rel_all
- pop {{r4,r5,pc}}
+ pop {{r3,r4,r5,pc}}
 rel_one:
  cmp r4,#4
  bhi rel_done
@@ -88,9 +88,9 @@ rel_one:
  mov r1,r4
  bl 0x1001ab42
 rel_done:
- pop {{r4,r5,pc}}
+ pop {{r3,r4,r5,pc}}
 ack:
- push {{r4,r5,r6,r7,lr}}
+ push {{r3,r4,r5,r6,r7,lr}}
  mov r5,r0
  mov r6,r1
  mov r7,r2
@@ -111,7 +111,7 @@ ack:
  ldr r0,[r4,#0x10]
  bl 0x10018c12
  add sp,#72
- pop {{r4,r5,r6,r7,pc}}
+ pop {{r3,r4,r5,r6,r7,pc}}
 handler:
  bl get_data
  cbz r0,h_exit
@@ -336,6 +336,7 @@ h_exit:
 asm += f'''
 task:
  push {{r4,r5,r6,r7,lr}}
+ sub sp,#4
  movw r0,#1152
  bl 0x100120a0
  cbz r0,t_dead
