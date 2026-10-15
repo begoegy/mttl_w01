@@ -88,3 +88,14 @@ Use only an owned/authorized canary. Required evidence:
 9. Keep exact 1.0.147 rollback artifact ready.
 
 No customer/fleet flash is authorized by this document.
+
+## Executable payload emulation
+
+`tools/sfn_cycle_payload_emulate.py` executes the injected Thumb handler/task with Unicorn while stubbing only the reviewed stock API calls. Current checks pass for:
+
+- valid `cycle:2:30` -> task parameter + exact armed ACK;
+- invalid channel/delay/missing argument -> no task and no ACK;
+- task-create failure -> no ACK;
+- task sequence -> 100 ms guard, relay OFF, 30 s local delay, relay ON, self-delete.
+
+This strengthens pre-flash QA but is not a substitute for a physical canary.
