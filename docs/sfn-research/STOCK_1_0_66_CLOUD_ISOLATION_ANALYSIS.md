@@ -179,3 +179,15 @@ The vendor task entry pointers were also checked in the pinned stock image. Each
 Focused builder tests pass: exact stock input produces only the approved diff set, and a one-byte-mutated source is refused. The unrelated legacy HA MQTT test cannot currently import because the research environment lacks the optional `paho` dependency; no environment packages were installed or changed for this firmware research.
 
 **Status remains LAB ONLY. No device has received this candidate.**
+
+## Physical canary result — 2026-10-15
+
+The first remote runtime attempt to install the restricted neutral lab image on canary `88D039394D73` did **not** complete. Source was confirmed `0.1.54-1.0.66`; target was lab identity `0.1.54-1.0.69`, SHA-256 `a1f7db34b32e171b529029276e8aa7488cf9307e5567da48c3d7af5bac871cb3`.
+
+SFN Power job `970784d5266a77c3` passed preflight, paused normal polling, armed the HTTP lease, received `up:ota:ota_ok`, and began transfer. The device reset the HTTP connection after the backend attempted `68096 / 327944` bytes. Caddy independently logged `connection reset by peer` from the canary public IP. The transfer never completed and the device did not reboot into the lab image.
+
+Post-failure evidence is safe: the canary stayed online on stock `0.1.54-1.0.66`; four outlet states were still reported, voltage was `194.7 V`, and RSSI was `-51 dBm`. No second OTA attempt was made.
+
+This invalidates any assumption that the already-proven remote runtime path `1.0.38 -> stock 1.0.66` automatically proves `stock 1.0.66 -> custom neutral image`. Public Direct-local documentation uses either the stock MEF OTA flow on a redirected lab network or the setup-AP OTA tool (`192.168.1.1:30300`) to install the patched custom firmware from stock `1.0.66`.
+
+**Gate:** do not re-enable the neutral lab package in production until one of those `1.0.66` installation paths is reproduced on the physical canary with packet/transfer evidence. The lab binary remains research-only.
