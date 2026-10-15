@@ -218,3 +218,11 @@ Job `a50836008533a54f` transferred the complete `327944 / 327944` bytes, reboote
 A server-side packet capture recorded the direct canary flows to production TCP `80` for OTA and TCP `10086` for the device protocol. This proves the direct remote OTA path and reconnect to SFN. It does **not** by itself observe arbitrary traffic leaving the customer's LAN toward third-party destinations; the no-vendor-cloud claim still rests on the exact static hostname replacement to `127.0.0.1` plus a future LAN-side capture if definitive runtime egress proof is required.
 
 This is one physical canary only. Do not generalize compatibility to other hardware/source firmware families until each source family has its own controlled canary.
+
+## Neutral-v2 maintenance OTA proof — 1.0.70 -> 1.0.71
+
+On 2026-10-15, canary `88D039394D73` completed a second fully remote OTA while already running the neutral-v2 image. A maintenance image `1.0.71` was derived from the exact proven `1.0.70` artifact; static comparison changed only the final version byte at decoded offset `0x18e69` plus the additive checksum byte at `0x50104`. All four loopback host replacements and the controller/OTA/RSSI protocol markers remained unchanged.
+
+Artifact: `comMTTL-W01_1.0.71-neutral-lab-v2.fwr`, 327944 bytes, SHA-256 `c8882481a19876e2e809e4d031138617f51c6f42b8fb706d66a37fe101a57081`.
+
+Job `8172430ecafda4fe` transferred all 327944 bytes, rebooted, reconnected as `0.1.54-1.0.71`, and passed verification with four outlet reports, voltage `207.1 V`, and RSSI `-52 dBm`. Rollback protection pointed to the exact `1.0.70` package and was not needed. This proves the current neutral-v2 canary retains the direct remote OTA path for future maintenance images. It does not by itself prove absence of every possible manufacturer network flow; customer-side gateway capture remains the required proof for that claim.
