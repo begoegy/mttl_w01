@@ -1,0 +1,34 @@
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+TEST 0x1001606a 198 0x10016130 limit 0x10016130 free 0
+ MAIN 0x1001eb6c 736 0x1001ee4c limit 0x1001ee54 free 8
+FUNC
+shim 0x1001606a 8 0x10016072
+get 0x10016072 120 0x100160ea
+next 0x100160ea 70 0x10016130
+control 0x1001eb6c 16 0x1001eb7c
+res 0x1001eb7c 100 0x1001ebe0
+callback 0x1001ebe0 164 0x1001ec84
+ack4 0x1001ec84 50 0x1001ecb6
+ackstate 0x1001ecb6 24 0x1001ecce
+handler 0x1001ecce 382 0x1001ee4c
+ACK data 31 fmt 22 name 9 pre-pointer room 60 fits True
+TOTAL code 934 capacity 942
+vendor_delimiter_r8_preserved=PASS
+stage_barrier_ack_codes=PASS
+real_wire_crlf_parser=PASS
+timer_queue_machine_code=PASS
+atomic_incomplete_replace=PASS
+stale_timer_after_replace=PASS
+offline_local_execution=PASS
+duplicate_commit=PASS
+malformed_fail_closed=PASS
+strict_numeric_parser=PASS
+single_state_single_timer=PASS
+no_new_worker_task=PASS
+timer_create_failure=PASS
+timer_failure_status=PASS
+relay_failure_status=PASS
+cold_boot_queue_loss=PASS
+acks= 21 relay= [(12, 1), (11, 3)]

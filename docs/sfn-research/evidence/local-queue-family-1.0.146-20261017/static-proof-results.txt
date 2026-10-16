@@ -1,0 +1,17 @@
+SOURCE_PIN=PASS
+source_version=0.1.55-1.0.146
+source_size=327944
+source_sha256=ae997d79f8e54376a4eb94e447cf94582311544aa128ff4a487d2190f67208ad
+rollback_sha256=ae997d79f8e54376a4eb94e447cf94582311544aa128ff4a487d2190f67208ad
+binary_family=mttl-w01-hw002-r1
+neutral_1.0.147_lineage=PASS
+queue_owned_source_regions_match_proven_1.0.66=PASS
+queue_external_entrypoints_match_proven_1.0.66=PASS
+timer_service_xref=PASS
+relay_dispatcher_xref=PASS
+native_timer_control_xref=PASS
+target_queue_bytes_match_physical_1.0.81=PASS
+direct_1.0.146_to_1.0.150_unexpected_diff=0
+target_1.0.150_sha256=14a89fdf7cff3961d6bc116c10601ff2b319656c557ea7fc7460d85f64aaa9b4
+STATIC_PROOF=PASS
+NO_DEVICE_IO NO_FLASH NO_OTA NO_DEPLOY NO_CATALOG_WRITE

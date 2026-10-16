@@ -1,0 +1,9 @@
+source=work/firmware/1.0.146/comMTTL-W01_1.0.146.fwr
+source_sha256=ae997d79f8e54376a4eb94e447cf94582311544aa128ff4a487d2190f67208ad
+target=/srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.150-local-queue-hw002-r1b-lab.fwr
+target_sha256=14a89fdf7cff3961d6bc116c10601ff2b319656c557ea7fc7460d85f64aaa9b4
+build_a_sha256=14a89fdf7cff3961d6bc116c10601ff2b319656c557ea7fc7460d85f64aaa9b4
+build_b_sha256=14a89fdf7cff3961d6bc116c10601ff2b319656c557ea7fc7460d85f64aaa9b4
+cmp=PASS
+REPRODUCIBLE_BUILD=PASS
+NO_DEVICE_IO NO_FLASH NO_OTA NO_DEPLOY NO_CATALOG_CHANGE
