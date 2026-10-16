@@ -38,3 +38,9 @@ Repeated QA passes:
 - daily/weekly/once event model and invalid-event rejection pass
 
 The artifact remains LAB-only. No device was flashed while generating these results.
+
+## Production canary preflight checkpoint
+
+The candidate artifact was copied into the protected production firmware catalog with `offer:false`, exact SHA pinning, source `0.1.54-1.0.71`, model `lgutap`, and `allowed_macs=[88D039394D73]`. A dedicated `1.0.75 -> 1.0.71` recovery manifest points to the physically proven 1.0.71 bytes. Production `FirmwareCatalog` validation reports the target allowed for New and rollback available; all rollback manifests for reported 1.0.71 resolve to one identical SHA (`c8882481...`). No unfinished firmware job exists for New at this checkpoint.
+
+The physical OTA has **not** been started at this checkpoint. It must be initiated only through the authenticated Platform Admin firmware-manager path so the audited job, byte progress, post-boot verification, and automatic rollback remain in force.
