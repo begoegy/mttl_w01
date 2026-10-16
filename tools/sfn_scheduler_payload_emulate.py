@@ -7,10 +7,11 @@ from unicorn.arm_const import *
 from tools.sfn_build_neutral_cycle_lab_1_0_147 import decode
 from tools.sfn_scheduler_flash_model import encode as flash_encode, Item, NONE, MAX_IMAGE_SIZE, SECTOR_A, SECTOR_B
 from tools.sfn_scheduler_segments import build_segments
+from tools.sfn_scheduler_payload_probe import DATA_PTR
 
 ARTIFACT=Path('/srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.149-offline-scheduler-lab.fwr')
 SEG=build_segments(); LOAD=0x10006000; HANDLER=SEG['handler_addr']; TASK=SEG['task'][0]; RUNTIME=SEG['main'][0]; EXIT=0x100165BA
-DATA_PTR=0x10052DA4; HEAP=0x20002000; HEAP_SIZE=0x2000; RAM=0x20000000; SP=0x2001E000; CTX=0x20001000; TEXT=0x20001800
+HEAP=0x20002000; HEAP_SIZE=0x2000; RAM=0x20000000; SP=0x2001E000; CTX=0x20001000; TEXT=0x20001800
 STUBS={0x10016BEE:'tail_find',0x100168EC:'tail_housekeeping',0x10016BEC:'colon',0x10015498:'atoi',0x10010408:'tick',0x1000A8CC:'snprintf',0x1000AA00:'strlen',0x10018C12:'send',0x100157E6:'flash_write',0x1001587A:'flash_read',0x1000AA08:'memcpy',0x1000A9F0:'memset',0x100120A0:'malloc',0x100101C6:'delay',0x1001AB42:'relay'}
 RAW=bytearray(ARTIFACT.read_bytes()); APP=bytes(decode(RAW)[16:-4])
 
