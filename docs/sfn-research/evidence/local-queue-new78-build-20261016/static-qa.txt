@@ -1,0 +1,56 @@
+TEST 0x1001606a 190 0x10016128 limit 0x10016130 free 8
+ MAIN 0x1001eb6c 720 0x1001ee3c limit 0x1001ee54 free 24
+FUNC
+shim 0x1001606a 8 0x10016072
+get 0x10016072 120 0x100160ea
+next 0x100160ea 62 0x10016128
+control 0x1001eb6c 16 0x1001eb7c
+res 0x1001eb7c 100 0x1001ebe0
+callback 0x1001ebe0 164 0x1001ec84
+ack4 0x1001ec84 50 0x1001ecb6
+ackstate 0x1001ecb6 24 0x1001ecce
+handler 0x1001ecce 366 0x1001ee3c
+ACK data 31 fmt 22 name 9 pre-pointer room 60 fits True
+TOTAL code 910 capacity 942
+source_sha256 c8882481a19876e2e809e4d031138617f51c6f42b8fb706d66a37fe101a57081
+candidate_sha256 87287d6d597ddf8cc4caaab27ab9f78ae08bfa18ec68e9a90b98520c437742c3
+candidate_size 327944
+checksum_valid True
+version b'1.0.78'
+queue_keyword b'sfnq\x00'
+memory_keyword b'memory\x00'
+memory_format b'up:memory:%d:%d\r\n\x00\x00\x00'
+neutral_loopbacks 4
+pointer_initial 00000000
+test_blob_exact True
+main_blob_exact True
+format_exact True
+name_exact True
+changed_decoded_bytes 985
+changed_runs
+  0x1007a..0x1007b (1)
+  0x1007c..0x100a4 (40)
+  0x100a5..0x100fc (87)
+  0x100fd..0x10140 (67)
+  0x106e4..0x106e8 (4)
+  0x18b7c..0x18b91 (21)
+  0x18b92..0x18bb2 (32)
+  0x18bb3..0x18be4 (49)
+  0x18be5..0x18be6 (1)
+  0x18be7..0x18c0f (40)
+  0x18c10..0x18c8d (125)
+  0x18c8e..0x18d00 (114)
+  0x18d01..0x18d13 (18)
+  0x18d15..0x18d73 (94)
+  0x18d74..0x18e60 (236)
+  0x18e61..0x18e62 (1)
+  0x18e63..0x18e64 (1)
+  0x18e69..0x18e6a (1)
+  0x18e6c..0x18e85 (25)
+  0x18e88..0x18e8d (5)
+  0x18e90..0x18e99 (9)
+  0x18e9c..0x18ea8 (12)
+  0x50104..0x50106 (2)
+calls_xTaskCreate False
+new_worker_task False
+STATIC_QA=PASS

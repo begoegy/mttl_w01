@@ -1,0 +1,14 @@
+{
+  "scope": "LAB_ONLY_NEW_CANARY",
+  "allowed_mac": "88D039394D73",
+  "model": "lgutap",
+  "candidate_version": "0.1.54-1.0.78",
+  "candidate_file": "/srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.78-local-queue-new-lab.fwr",
+  "candidate_sha256": "87287d6d597ddf8cc4caaab27ab9f78ae08bfa18ec68e9a90b98520c437742c3",
+  "rollback_version": "0.1.54-1.0.71",
+  "rollback_file": "/srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.71-neutral-lab-v2.fwr",
+  "rollback_sha256": "c8882481a19876e2e809e4d031138617f51c6f42b8fb706d66a37fe101a57081",
+  "offer": false,
+  "flash_authorized": false,
+  "deploy_authorized": false
+}

@@ -1,0 +1,7 @@
+utc=2026-10-16T19:19:15Z
+service=active
+server_version=sfn-power 1.6.7
+88327854a16a003df29598f44599cb026cea853b75d25fb7a3a2859b80b05072  /opt/sfn-power/sfn-power.pyz
+name  mac           firmware       last_seen       
+----  ------------  -------------  ----------------
+New   88D039394D73  0.1.54-1.0.71  1792178349.39304
