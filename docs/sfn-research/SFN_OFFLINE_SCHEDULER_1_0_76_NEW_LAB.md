@@ -55,3 +55,16 @@ The exact final artifact proves the stock creator literal at `0x10009B24` is `0x
 - daily/weekly/once event model and invalid-event rejection pass
 
 No device was flashed while generating these 1.0.76 QA results.
+
+## Physical canary result — REJECTED
+
+Two 1.0.76 physical canaries booted and were firmware-verified but failed the first scheduler clock command on hardware:
+
+- SHA `fb191157569d519f71c6f7aa0a9cc8da84db51135df19af90b1461bb51c61696` (100 ms lazy-start yield): booted as 1.0.76; repeated `clock_not_acknowledged` after reconnects/reboot.
+- SHA `848e9f766ce86d3a440e5ea69b25365f8eebecfccc78128662ed6dac1d95ccf7` (1000 ms lazy-start yield): booted and verified as 1.0.76; failed with the same `clock_not_acknowledged` result.
+
+Therefore the parser-side lazy-start hypothesis is rejected; increasing the yield does not solve the hardware failure. Do not reflash either 1.0.76 artifact.
+
+New was recovered to the proven 1.0.71 image. The final recovery transferred all 327944 bytes and finished `succeeded / verified`; New reported `0.1.54-1.0.71` afterward. The 1.0.76 target manifest was moved out of the active catalog into `firmware/rejected` and production server bytes were restored to the pre-canary SHA `f5515f736144425b285f0e689c6b5238cfb0617ea6a20b4bd690cbb47f2674e1`.
+
+Next research must not assume task liveness from emulator bootstrap. A future candidate needs hardware-relevant proof that the scheduler task is created during the real boot path (or an equivalent design that does not depend on that task), before another physical canary is authorized.
