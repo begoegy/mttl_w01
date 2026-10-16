@@ -84,3 +84,11 @@ Decision: `1.0.78 LOCAL QUEUE CANARY REJECTED FOR FEATURE READINESS`.
 The device itself remained healthy, but the feature gate failed. Per the predeclared recovery plan, New was restored to the exact proven `0.1.54-1.0.71` artifact. Recovery job `4b89548e825da0ea` transferred `327944/327944` and finished `succeeded / verified`; New reconnected on `1.0.71`.
 
 No second `sfnq` probe, no queue transaction, no relay test, and no fleet action is authorized from this result. The next work is static/lab-only proof of the initialization/timer-create path before any new candidate is built.
+
+## Root cause follow-up
+
+The 1.0.78 status failure is now reproduced exactly in the candidate machine-code harness when the real server line ending is included. `sfnq:4\r\n` returns `up:sfnq:0:0:0:0`; the earlier artificial `sfnq:4\0` host test returned code 4. The numeric helper accepted only NUL or `:` as token terminators, so the final field rejected CR/LF and failed closed.
+
+The physical current-free-heap change, 34,728 -> 34,416 bytes, is 312 bytes: exactly the modeled allocator charge for a 256-byte state (264) plus a 40-byte timer object (48). Together with the exact harness reproduction, this closes the earlier ambiguity about a likely timer-create failure: the observed code 0 is explained by the real-wire CRLF parser mismatch after initialization.
+
+A lab-only 1.0.79 candidate fixes only that parser contract and is reviewed separately in `SFN_LOCAL_QUEUE_NEW79_BUILD_REVIEW.md`. New remains on 1.0.71; no new physical canary was started by this analysis.
