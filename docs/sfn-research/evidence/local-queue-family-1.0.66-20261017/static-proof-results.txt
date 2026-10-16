@@ -1,0 +1,26 @@
+SOURCE_PIN=PASS
+source_version=0.1.54-1.0.66
+source_size=327944
+source_sha256=d780b578af69d52f3a05191a8e7d91a20e05085a912722327481cd5663682c04
+rollback_sha256=d780b578af69d52f3a05191a8e7d91a20e05085a912722327481cd5663682c04
+binary_family=mttl-w01-hw002-r1
+source_to_1.0.71_unexpected_diff=0
+lineage_diff_range=0x18e68..0x18e6a
+lineage_diff_range=0x20594..0x205a8
+lineage_diff_range=0x20660..0x20674
+lineage_diff_range=0x4dcfc..0x4dcff
+lineage_diff_range=0x4dd00..0x4dd12
+lineage_diff_range=0x4dd30..0x4dd47
+lineage_diff_range=0x50104..0x50106
+timer_service_xref=PASS
+timer_create_control=PASS
+relay_dispatcher_xref=PASS
+parser_ingress=PASS
+memory_state_pointer=PASS
+factory_test_region_sha256=5a59b6ffe697a8e26a9a08ffa2ae9c08f40f941a052008b7a56c5f18eea40318
+main_reclaimed_region_sha256=a54fc12574a6b67d382380f24c8e16f7d0e28674ba15b90d9eec3f370eb25fc1
+data_region_sha256=0af8fcc4674748c23616887479821710c663976aac92551f8431aee49e5e97d4
+direct_1.0.66_to_exact_1.0.81_unexpected_diff=0
+target_1.0.81_sha256=5b96489849e8808512a0e3f918013102ced8cb5610f939ae49da60cc2220ff0a
+STATIC_PROOF=PASS
+NO_DEVICE_IO NO_FLASH NO_OTA NO_DEPLOY NO_CATALOG_WRITE
