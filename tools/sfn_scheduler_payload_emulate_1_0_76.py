@@ -35,8 +35,21 @@ if __name__=='__main__':
     assert (entry,depth,param,priority)==(qa.TASK|1,0x400,0,2),state['task_create_calls'][0]
     ptr=int.from_bytes(uc.mem_read(qa.DATA_PTR,4),'little')
     assert ptr==qa.LAZY_STATE,hex(ptr)
-    assert 100 in state['delay'],state['delay']
+    assert 1000 in state['delay'],state['delay']
     print(f'lazy_first_command_ack=PASS ptr={ptr:#x} task_create=1 stack_words={depth} priority={priority}')
+    # A second command must reuse the same task, then a complete durable schedule transaction must work.
+    sent2,_=qa.command(uc,state,CMD)
+    assert sent2==[ACK],sent2
+    assert len(state['task_create_calls'])==1,state['task_create_calls']
+    minute=(EPOCH//60)%1440
+    assert qa.command(uc,state,'sfn:91:76:1')==( [], [] )
+    assert qa.command(uc,state,f'sfn:92:0:1:1:0:65535:{minute}:1')==( [], [] )
+    sent3,writes3=qa.command(uc,state,'sfn:93:76')
+    assert writes3 and sent3==[b'up:sfn:93:76:769\r\n'],(sent3,writes3)
+    sent4,_=qa.command(uc,state,'sfn:94')
+    assert sent4==[b'up:sfn:94:76:769\r\n'],sent4
+    assert len(state['task_create_calls'])==1,state['task_create_calls']
+    print('lazy_full_transaction=PASS task_create_stays_1')
 
     # Normal task-start path remains valid and publishes only after initialization reaches runtime.
     uc2,state2=qa.setup(malloc_fail=True); ptr2,_=qa.run_boot(uc2,state2)

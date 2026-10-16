@@ -110,7 +110,7 @@ def build_segments():
     validate_addr = TASK_BASE + len(boot_tmp)
     validate_bin = assemble(validate_src, validate_addr)
     get_addr = validate_addr + len(validate_bin)
-    get_src = f'''get_data:\n movw r0,#{DATA_PTR & 0xffff}\n movt r0,#{DATA_PTR >> 16}\n ldr r1,[r0]\n cbnz r1,gd_fast\n push {{r4,lr}}\n mov r4,r0\n bl 0x10009a12\n movs r0,#100\n bl 0x100101c6\n ldr r1,[r4]\n mov r0,r1\n pop {{r4,pc}}\ngd_fast:\n mov r0,r1\n bx lr\n'''
+    get_src = f'''get_data:\n movw r0,#{DATA_PTR & 0xffff}\n movt r0,#{DATA_PTR >> 16}\n ldr r1,[r0]\n cbnz r1,gd_fast\n push {{r4,lr}}\n mov r4,r0\n bl 0x10009a12\n movw r0,#1000\n bl 0x100101c6\n ldr r1,[r4]\n mov r0,r1\n pop {{r4,pc}}\ngd_fast:\n mov r0,r1\n bx lr\n'''
     get_bin = assemble(get_src, get_addr)
     boot_src = boot_raw.replace('bl validate', f'bl 0x{validate_addr:x}')
     boot_src = boot_src.replace('cbz r0,t_loop', 'cbz r0,boot_runtime').replace('bls t_loop', 'bls boot_runtime')
