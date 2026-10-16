@@ -63,6 +63,10 @@ def build_segments():
     ack_src = section('ack', 'handler')
     handler_src = section('handler', 'task')
     handler_src = handler_src.replace(' cbz r0,h_exit', ' cmp r0,#0\n beq.w h_exit', 1)
+    # This hook is inline in the stock command parser. Preserve the parser's live low registers
+    # across all scheduler calls; four low registers keep the stack 8-byte aligned.
+    handler_src = handler_src.replace('handler:\n', 'handler:\n push {r3,r5,r6,r7}\n', 1)
+    handler_src = handler_src.replace('h_exit:\n b 0x100165ba', 'h_exit:\n pop {r3,r5,r6,r7}\n b 0x100165ba', 1)
 
     # Keep bounds checks that prevent dangerous relay values, but semantic day/date pairing is
     # compiled by the server and cannot make an invalid relay fire; removing these checks saves
@@ -72,8 +76,12 @@ def build_segments():
     handler_src = handler_src.replace(''' cmp r5,#0\n bne hi_repeat_date\n cmp r0,r1\n beq h_exit\n b hi_date_ok\nhi_repeat_date:\n cmp r0,r1\n bne h_exit\nhi_date_ok:\n strh r0,[r6,#4]\n''', ' strh r0,[r6,#4]\n')
 
     # ACK sits after the immutable version marker; the old bytes there were MEF-only HTTP strings.
-    ack_src = ack_src.replace('movw r2, #0xee30', f'movw r2, #{FMT & 0xffff}')
-    ack_src = ack_src.replace('movt r2, #0x1001', f'movt r2, #{FMT >> 16}')
+    # MONO is already formatted once, so Keystone source carries these immediates as decimal.
+    # Rewrite either decimal or hex spelling and fail closed if the old pointer survives.
+    ack_src, n_lo = re.subn(r'movw r2,\s*#(?:60976|0xee30)\b', f'movw r2, #{FMT & 0xffff}', ack_src, count=1)
+    ack_src, n_hi = re.subn(r'movt r2,\s*#(?:4097|0x1001)\b', f'movt r2, #{FMT >> 16}', ack_src, count=1)
+    if (n_lo, n_hi) != (1, 1):
+        raise AssertionError(f'ACK format pointer rewrite failed: low={n_lo} high={n_hi}')
     ack_bin = assemble(ack_src, ACK_BASE)
 
     # Runtime starts at the reclaimed MEF downloader entry. Measure it first so relay/handler

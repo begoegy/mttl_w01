@@ -1,7 +1,7 @@
 # SFN Offline Scheduler 1.0.72 — New canary
 
 Date: 2026-10-16
-Status: LAB candidate; physical canary pending.
+Status: **REJECTED after physical canary**. Do not flash or register this image.
 Canary: `New`, MAC `88D039394D73`, model `lgutap`.
 
 ## Proven source
@@ -53,3 +53,9 @@ Unicorn payload QA passed:
 Maximum-table Flash model passed all 344 interruption cut points. Maximum persisted table size is 344 bytes / 40 switch events.
 
 No physical device was flashed while producing these results.
+
+## Physical rejection record
+
+The 1.0.72 image transferred completely to `New` (327944/327944) and booted as `0.1.54-1.0.72`, but the first offline-scheduler clock command was not acknowledged and the device command session stopped producing normal telemetry. The device was safely recovered with the exact proven 1.0.71 image (`c8882481...`) and returned to fresh telemetry.
+
+Root cause was reproduced from the exact rejected artifact: the generated ACK routine still loaded format pointer `0x1001EE30`, which is executable code in this layout, instead of the intended `0x100166A4` string. The old emulator hid this because its `snprintf` stub synthesized the response without reading the firmware's actual format pointer. A second test gap was also closed: the inline parser hook now must preserve `r5/r6/r7`.

@@ -46,7 +46,10 @@ def setup(flash=None):
             uc.reg_write(UC_ARM_REG_R0,(sign*int(digs or '0'))&0xffffffff); ret(uc)
         elif name=='tick': uc.reg_write(UC_ARM_REG_R0,state['tick']); ret(uc)
         elif name=='snprintf':
-            dest=uc.reg_read(UC_ARM_REG_R0); code=uc.reg_read(UC_ARM_REG_R3); sp=uc.reg_read(UC_ARM_REG_SP); v,m=struct.unpack('<II',uc.mem_read(sp,8)); rendered=f'up:sfn:{code}:{v}:{m}\r\n'.encode(); uc.mem_write(dest,rendered+b'\0'); uc.reg_write(UC_ARM_REG_R0,len(rendered)); ret(uc)
+            dest=uc.reg_read(UC_ARM_REG_R0); fmt=uc.reg_read(UC_ARM_REG_R2); code=uc.reg_read(UC_ARM_REG_R3); sp=uc.reg_read(UC_ARM_REG_SP); v,m=struct.unpack('<II',uc.mem_read(sp,8))
+            actual_fmt=cstr(uc,fmt)
+            assert actual_fmt==b'up:sfn:%d:%d:%d\r\n', (hex(fmt), actual_fmt)
+            rendered=f'up:sfn:{code}:{v}:{m}\r\n'.encode(); uc.mem_write(dest,rendered+b'\0'); uc.reg_write(UC_ARM_REG_R0,len(rendered)); ret(uc)
         elif name=='strlen': uc.reg_write(UC_ARM_REG_R0,len(cstr(uc,uc.reg_read(UC_ARM_REG_R0)))); ret(uc)
         elif name=='send':
             a=uc.reg_read(UC_ARM_REG_R1); n=uc.reg_read(UC_ARM_REG_R2); state['send'].append(bytes(uc.mem_read(a,n))); uc.reg_write(UC_ARM_REG_R0,n); ret(uc)
@@ -78,8 +81,11 @@ def run_boot(uc,state):
 def command(uc,state,line):
     before_send=len(state['send']); before_writes=len(state['writes'])
     uc.mem_write(TEXT,line.encode()+b'\0')
-    uc.reg_write(UC_ARM_REG_SP,SP); uc.reg_write(UC_ARM_REG_R4,CTX); uc.reg_write(UC_ARM_REG_R5,TEXT)
+    sentinels=(TEXT,0x12345678,0x23456789)
+    uc.reg_write(UC_ARM_REG_SP,SP); uc.reg_write(UC_ARM_REG_R4,CTX); uc.reg_write(UC_ARM_REG_R5,sentinels[0]); uc.reg_write(UC_ARM_REG_R6,sentinels[1]); uc.reg_write(UC_ARM_REG_R7,sentinels[2])
     uc.emu_start(HANDLER|1,EXIT|1,count=10000)
+    after=(uc.reg_read(UC_ARM_REG_R5),uc.reg_read(UC_ARM_REG_R6),uc.reg_read(UC_ARM_REG_R7))
+    assert after==sentinels, (sentinels,after)
     return state['send'][before_send:],state['writes'][before_writes:]
 
 def runtime_minute(uc,state):
