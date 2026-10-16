@@ -56,6 +56,13 @@ def build_segments():
     next_src = section('next_int', 'validate').replace('next_int:', '')
     # validate lives after the boot block; boot address is computed after a first size pass.
     boot_raw = 'task:' + MONO.split('task:', 1)[1].split('t_loop:', 1)[0]
+    # The vendor task already owns a 0x400-word (4096-byte) RTOS stack. Keep scheduler state
+    # inside that persistent task stack instead of consuming another 1152 bytes from the device heap.
+    heap_boot = f''' movw r0,#1152\n bl 0x100120a0\n cbz r0,t_dead\n mov r4,r0\n mov r2,r0\n movw r0,#{DATA_PTR & 0xffff}\n movt r0,#{DATA_PTR >> 16}\n str r2,[r0]\n'''
+    stack_boot = f''' sub.w sp,sp,#1152\n mov r4,sp\n mov r2,r4\n movw r0,#{DATA_PTR & 0xffff}\n movt r0,#{DATA_PTR >> 16}\n str r2,[r0]\n'''
+    if heap_boot not in boot_raw:
+        raise AssertionError('scheduler heap bootstrap layout changed')
+    boot_raw = boot_raw.replace(heap_boot, stack_boot, 1)
     runtime_src = 't_loop:' + MONO.split('t_loop:', 1)[1].split('t_dead:', 1)[0]
     runtime_src = runtime_src.replace(' cbz r0,t_sleep', ' cmp r0,#0\n beq.w t_sleep')
     validate_src = section('validate', 'relay')

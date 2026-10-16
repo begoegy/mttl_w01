@@ -11,7 +11,7 @@ from tools.sfn_scheduler_segments import build_segments
 ARTIFACT=Path('/srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.149-offline-scheduler-lab.fwr')
 SEG=build_segments(); LOAD=0x10006000; HANDLER=SEG['handler_addr']; TASK=SEG['task'][0]; RUNTIME=SEG['main'][0]; EXIT=0x100165BA
 DATA_PTR=0x10052DA4; HEAP=0x20002000; HEAP_SIZE=0x2000; RAM=0x20000000; SP=0x2001E000; CTX=0x20001000; TEXT=0x20001800
-STUBS={0x10016BEC:'colon',0x10015498:'atoi',0x10010408:'tick',0x1000A8CC:'snprintf',0x1000AA00:'strlen',0x10018C12:'send',0x100157E6:'flash_write',0x1001587A:'flash_read',0x1000AA08:'memcpy',0x1000A9F0:'memset',0x100120A0:'malloc',0x100101C6:'delay',0x1001AB42:'relay'}
+STUBS={0x10016BEE:'tail_find',0x100168EC:'tail_housekeeping',0x10016BEC:'colon',0x10015498:'atoi',0x10010408:'tick',0x1000A8CC:'snprintf',0x1000AA00:'strlen',0x10018C12:'send',0x100157E6:'flash_write',0x1001587A:'flash_read',0x1000AA08:'memcpy',0x1000A9F0:'memset',0x100120A0:'malloc',0x100101C6:'delay',0x1001AB42:'relay'}
 RAW=bytearray(ARTIFACT.read_bytes()); APP=bytes(decode(RAW)[16:-4])
 
 def cstr(uc,a,cap=256):
@@ -23,20 +23,25 @@ def cstr(uc,a,cap=256):
     return bytes(out)
 def ret(uc): uc.reg_write(UC_ARM_REG_PC,uc.reg_read(UC_ARM_REG_LR))
 
-def setup(flash=None):
+def setup(flash=None, malloc_fail=False, stop_at_exit=True):
     uc=Uc(UC_ARCH_ARM,UC_MODE_THUMB); uc.mem_map(0x10000000,0x100000); uc.mem_write(LOAD,APP)
     uc.mem_map(RAM,0x20000); uc.reg_write(UC_ARM_REG_SP,SP); uc.mem_write(CTX+0x10,struct.pack('<I',77)); uc.reg_write(UC_ARM_REG_R4,CTX)
-    state={'tick':100000,'flash':{SECTOR_A:bytearray(b'\xff'*MAX_IMAGE_SIZE),SECTOR_B:bytearray(b'\xff'*MAX_IMAGE_SIZE)},'send':[],'relay':[],'delay':[],'writes':[],'stop_on_delay':False}
+    state={'malloc_fail':malloc_fail,'malloc_calls':0,'stop_at_exit':stop_at_exit,'parser_loop':False,'tick':100000,'flash':{SECTOR_A:bytearray(b'\xff'*MAX_IMAGE_SIZE),SECTOR_B:bytearray(b'\xff'*MAX_IMAGE_SIZE)},'send':[],'relay':[],'delay':[],'writes':[],'stop_on_delay':False}
     if flash:
         for k,v in flash.items(): state['flash'][k][:len(v)]=v
     def hook(uc,address,size,_):
         even=address&~1
-        if even==EXIT: uc.emu_stop(); return
+        if even==EXIT and state['stop_at_exit']: uc.emu_stop(); return
+        if even==0x10015D64 and not state['stop_at_exit']: state['parser_loop']=True; uc.emu_stop(); return
         name=STUBS.get(even)
         if not name:return
         sp=uc.reg_read(UC_ARM_REG_SP)
         if sp & 7: raise AssertionError(f'unaligned stack at {name}: {sp:#x}')
-        if name=='colon':
+        if name=='tail_find':
+            uc.reg_write(UC_ARM_REG_R0,0); ret(uc)
+        elif name=='tail_housekeeping':
+            ret(uc)
+        elif name=='colon':
             start=uc.reg_read(UC_ARM_REG_R5); data=cstr(uc,start); pos=data.find(b':'); uc.reg_write(UC_ARM_REG_R0,0 if pos<0 else start+pos); ret(uc)
         elif name=='atoi':
             t=cstr(uc,uc.reg_read(UC_ARM_REG_R0)).decode('ascii','ignore'); sign=-1 if t.startswith('-') else 1; t=t[1:] if t[:1] in '+-' else t; digs=''
@@ -57,7 +62,7 @@ def setup(flash=None):
             a=uc.reg_read(UC_ARM_REG_R0); v=uc.reg_read(UC_ARM_REG_R1)&255; n=uc.reg_read(UC_ARM_REG_R2); uc.mem_write(a,bytes([v])*n); uc.reg_write(UC_ARM_REG_R0,a); ret(uc)
         elif name=='memcpy':
             d=uc.reg_read(UC_ARM_REG_R0); s=uc.reg_read(UC_ARM_REG_R1); n=uc.reg_read(UC_ARM_REG_R2); uc.mem_write(d,bytes(uc.mem_read(s,n))); uc.reg_write(UC_ARM_REG_R0,d); ret(uc)
-        elif name=='malloc': uc.reg_write(UC_ARM_REG_R0,HEAP); ret(uc)
+        elif name=='malloc': state['malloc_calls']+=1; uc.reg_write(UC_ARM_REG_R0,0 if state['malloc_fail'] else HEAP); ret(uc)
         elif name=='flash_read':
             sector=uc.reg_read(UC_ARM_REG_R0); d=uc.reg_read(UC_ARM_REG_R1); n=uc.reg_read(UC_ARM_REG_R2); uc.mem_write(d,bytes(state['flash'][sector][:n])); uc.reg_write(UC_ARM_REG_R0,0); ret(uc)
         elif name=='flash_write':
@@ -75,7 +80,8 @@ def run_boot(uc,state):
     uc.emu_start(TASK|1,0,count=10000)
     state['stop_on_delay']=False
     ptr=struct.unpack('<I',uc.mem_read(DATA_PTR,4))[0]
-    assert ptr==HEAP,(hex(ptr),hex(HEAP))
+    assert ptr!=0,hex(ptr)
+    state['data_ptr']=ptr
     return ptr,state['delay'][before:]
 
 def command(uc,state,line):
@@ -90,13 +96,36 @@ def command(uc,state,line):
 
 def runtime_minute(uc,state):
     before=len(state['relay']); state['stop_on_delay']=True
-    uc.reg_write(UC_ARM_REG_SP,SP); uc.reg_write(UC_ARM_REG_R4,HEAP)
+    ptr=struct.unpack('<I',uc.mem_read(DATA_PTR,4))[0]; assert ptr
+    uc.reg_write(UC_ARM_REG_SP,SP); uc.reg_write(UC_ARM_REG_R4,ptr)
     uc.emu_start(RUNTIME|1,0,count=10000)
     state['stop_on_delay']=False
     return state['relay'][before:]
 
 def flash_copy(state):
     return {k:bytes(v) for k,v in state['flash'].items()}
+
+def parser_tail_probe():
+    uc,state=setup(stop_at_exit=False)
+    run_boot(uc,state)
+    uc.mem_write(TEXT,b'sfn:90:1800000000:0:0:0:0:0\0')
+    uc.reg_write(UC_ARM_REG_SP,SP); uc.reg_write(UC_ARM_REG_R4,CTX); uc.reg_write(UC_ARM_REG_R5,TEXT); uc.reg_write(UC_ARM_REG_R6,0x12345678); uc.reg_write(UC_ARM_REG_R7,0x23456789)
+    uc.emu_start(HANDLER|1,0,count=20000)
+    assert state['parser_loop'],state
+    assert uc.reg_read(UC_ARM_REG_R4)==CTX,hex(uc.reg_read(UC_ARM_REG_R4))
+    return True
+
+def heap_failure_probe():
+    uc,state=setup(malloc_fail=True)
+    state['stop_on_delay']=True
+    uc.reg_write(UC_ARM_REG_SP,SP); uc.reg_write(UC_ARM_REG_R0,0)
+    uc.emu_start(TASK|1,0,count=10000)
+    state['stop_on_delay']=False
+    ptr=struct.unpack('<I',uc.mem_read(DATA_PTR,4))[0]
+    assert ptr==0,hex(ptr)
+    sent,_=command(uc,state,'sfn:90:1800000000:0:0:0:0:0')
+    assert sent==[],sent
+    return True
 
 def main():
     # Fresh boot: no table is active, and task reaches its local scheduler sleep safely.

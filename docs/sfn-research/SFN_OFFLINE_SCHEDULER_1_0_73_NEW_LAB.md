@@ -1,7 +1,7 @@
 # SFN Offline Scheduler 1.0.73 — New canary
 
 Date: 2026-10-16
-Status: LAB candidate; physical canary pending.
+Status: **REJECTED after physical canary**. Do not flash or register this image.
 Canary: `New`, MAC `88D039394D73`, model `lgutap`.
 
 ## Proven source
@@ -34,3 +34,9 @@ Two independent builds were byte-for-byte identical. Final decoded artifact cont
 Strengthened Unicorn QA passes clock ACK, atomic incomplete generation handling, Flash commit/readback/status, cold-boot table recovery, clock resync requirement, offline due relay execution, corrupt-newest A/B fallback, real format-pointer validation, parser-register preservation, and 8-byte stack alignment at every stub call. Maximum-table Flash model passes all 344 interruption cut points.
 
 No physical device has been flashed with 1.0.73 at this checkpoint.
+
+## Physical rejection record
+
+The 1.0.73 image transferred 327944/327944 bytes and booted as `0.1.54-1.0.73`. The corrected ACK format pointer and parser-register preservation were present in the exact flashed artifact, but the first clock synchronization still received no ACK and the session later became unresponsive to normal polling. The strip was recovered to the exact proven 1.0.71 image and the recovery job verified successfully.
+
+A strengthened emulator subsequently reproduced the exact no-clock-ACK signature when the scheduler task's extra `malloc(1152)` fails. The old emulator always forced that allocation to succeed. This does not by itself prove the physical heap was the only cause, so the next design removes this dependency entirely and also exercises the stock parser tail after every scheduler command.
