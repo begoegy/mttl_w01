@@ -66,3 +66,21 @@ This physical canary proves the candidate boots, reconnects, preserves normal ou
 It does **not** yet prove the new `sfnq` queue parser/timer/relay behavior on hardware. The production server currently has no operator action for the new queue protocol. Queue-specific hardware testing must be a separate next phase, preferably beginning with a read-only `sfnq:4` status query before any scheduled relay transition.
 
 No other strip was updated or touched by this canary.
+
+## Queue readiness probe and rollback — 2026-10-16
+
+After the base-health canary, production gained a narrow operator-only parser for the candidate's read-only `sfnq:4` status command. No queue begin/item/commit command was exposed.
+
+The first and only physical queue-status probe on New returned:
+
+`up:sfnq:0:0:0:0`
+
+The candidate emulator already reserves `code=0` for a fail-closed initialization/error path; a healthy empty queue status was expected to be `up:sfnq:4:0:0:0`. Therefore **Local Queue runtime readiness failed on real hardware**. No queue item was staged or committed and no relay was switched by this probe.
+
+A following stock heap probe still reported `34416` current free bytes and `30960` minimum free bytes. This makes gross heap exhaustion unlikely, but does not distinguish state-allocation failure, fragmentation, timer-create ABI/contract failure, or another initialization precondition. Do not claim a root cause until static evidence closes it.
+
+Decision: `1.0.78 LOCAL QUEUE CANARY REJECTED FOR FEATURE READINESS`.
+
+The device itself remained healthy, but the feature gate failed. Per the predeclared recovery plan, New was restored to the exact proven `0.1.54-1.0.71` artifact. Recovery job `4b89548e825da0ea` transferred `327944/327944` and finished `succeeded / verified`; New reconnected on `1.0.71`.
+
+No second `sfnq` probe, no queue transaction, no relay test, and no fleet action is authorized from this result. The next work is static/lab-only proof of the initialization/timer-create path before any new candidate is built.
