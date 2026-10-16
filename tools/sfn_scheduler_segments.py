@@ -59,7 +59,7 @@ def build_segments():
     # The vendor task already owns a 0x400-word (4096-byte) RTOS stack. Keep scheduler state
     # inside that persistent task stack instead of consuming another 1152 bytes from the device heap.
     heap_boot = f''' movw r0,#1152\n bl 0x100120a0\n cbz r0,t_dead\n mov r4,r0\n mov r2,r0\n movw r0,#{DATA_PTR & 0xffff}\n movt r0,#{DATA_PTR >> 16}\n str r2,[r0]\n'''
-    stack_boot = f''' sub.w sp,sp,#1152\n mov r4,sp\n mov r2,r4\n movw r0,#{DATA_PTR & 0xffff}\n movt r0,#{DATA_PTR >> 16}\n str r2,[r0]\n'''
+    stack_boot = f''' sub.w sp,sp,#1152\n mov r4,sp\n'''
     if heap_boot not in boot_raw:
         raise AssertionError('scheduler heap bootstrap layout changed')
     boot_raw = boot_raw.replace(heap_boot, stack_boot, 1)
@@ -102,18 +102,19 @@ def build_segments():
 
     # Validate/get_data live in the old check_ota_ssl_task body, which the firmware already starts.
     # First measure boot, then place validate and get_data immediately after it.
-    boot_probe = boot_raw.replace('cbz r0,t_dead', 'cmp r0,#0\n beq.w boot_dead').replace('bl validate', f'bl 0x{TASK_BASE + 0xA0:x}')
+    publish = f'''boot_runtime:\n mov r2,r4\n movw r0,#{DATA_PTR & 0xffff}\n movt r0,#{DATA_PTR >> 16}\n str r2,[r0]\n b.w 0x{MAIN_BASE:x}\n'''
+    boot_probe = boot_raw.replace('bl validate', f'bl 0x{TASK_BASE + 0xA0:x}')
     boot_probe = boot_probe.replace('cbz r0,t_loop', 'cbz r0,boot_runtime').replace('bls t_loop', 'bls boot_runtime')
-    boot_probe += f'boot_runtime: b.w 0x{MAIN_BASE:x}\nboot_dead: movw r0,#5000; bl 0x100101c6; b boot_dead\n'
+    boot_probe += publish
     boot_tmp = assemble(boot_probe, TASK_BASE)
     validate_addr = TASK_BASE + len(boot_tmp)
     validate_bin = assemble(validate_src, validate_addr)
     get_addr = validate_addr + len(validate_bin)
-    get_src = section('get_data', 'next_int')
+    get_src = f'''get_data:\n movw r0,#{DATA_PTR & 0xffff}\n movt r0,#{DATA_PTR >> 16}\n ldr r1,[r0]\n cbnz r1,gd_fast\n push {{r4,lr}}\n mov r4,r0\n bl 0x10009a12\n movs r0,#100\n bl 0x100101c6\n ldr r1,[r4]\n mov r0,r1\n pop {{r4,pc}}\ngd_fast:\n mov r0,r1\n bx lr\n'''
     get_bin = assemble(get_src, get_addr)
-    boot_src = boot_raw.replace('cbz r0,t_dead', 'cmp r0,#0\n beq.w boot_dead').replace('bl validate', f'bl 0x{validate_addr:x}')
+    boot_src = boot_raw.replace('bl validate', f'bl 0x{validate_addr:x}')
     boot_src = boot_src.replace('cbz r0,t_loop', 'cbz r0,boot_runtime').replace('bls t_loop', 'bls boot_runtime')
-    boot_src += f'boot_runtime: b.w 0x{MAIN_BASE:x}\nboot_dead: movw r0,#5000; bl 0x100101c6; b boot_dead\n'
+    boot_src += publish
     boot_bin = assemble(boot_src, TASK_BASE)
     assert len(boot_bin) == len(boot_tmp)
 

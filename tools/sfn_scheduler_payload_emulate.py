@@ -11,8 +11,8 @@ from tools.sfn_scheduler_payload_probe import DATA_PTR
 
 ARTIFACT=Path('/srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.149-offline-scheduler-lab.fwr')
 SEG=build_segments(); LOAD=0x10006000; HANDLER=SEG['handler_addr']; TASK=SEG['task'][0]; RUNTIME=SEG['main'][0]; EXIT=0x100165BA
-HEAP=0x20002000; HEAP_SIZE=0x2000; RAM=0x20000000; SP=0x2001E000; CTX=0x20001000; TEXT=0x20001800
-STUBS={0x10016BEE:'tail_find',0x100168EC:'tail_housekeeping',0x10016BEC:'colon',0x10015498:'atoi',0x10010408:'tick',0x1000A8CC:'snprintf',0x1000AA00:'strlen',0x10018C12:'send',0x100157E6:'flash_write',0x1001587A:'flash_read',0x1000AA08:'memcpy',0x1000A9F0:'memset',0x100120A0:'malloc',0x100101C6:'delay',0x1001AB42:'relay'}
+HEAP=0x20002000; HEAP_SIZE=0x2000; LAZY_STATE=0x20004000; RAM=0x20000000; SP=0x2001E000; CTX=0x20001000; TEXT=0x20001800
+STUBS={0x10016BEE:'tail_find',0x100168EC:'tail_housekeeping',0x10016BEC:'colon',0x10015498:'atoi',0x10010408:'tick',0x1000A8CC:'snprintf',0x1000AA00:'strlen',0x10018C12:'send',0x100157E6:'flash_write',0x1001587A:'flash_read',0x1000AA08:'memcpy',0x1000A9F0:'memset',0x100120A0:'malloc',0x10010068:'xTaskCreate',0x100101C6:'delay',0x1001AB42:'relay'}
 RAW=bytearray(ARTIFACT.read_bytes()); APP=bytes(decode(RAW)[16:-4])
 
 def cstr(uc,a,cap=256):
@@ -27,7 +27,7 @@ def ret(uc): uc.reg_write(UC_ARM_REG_PC,uc.reg_read(UC_ARM_REG_LR))
 def setup(flash=None, malloc_fail=False, stop_at_exit=True):
     uc=Uc(UC_ARCH_ARM,UC_MODE_THUMB); uc.mem_map(0x10000000,0x100000); uc.mem_write(LOAD,APP)
     uc.mem_map(RAM,0x20000); uc.reg_write(UC_ARM_REG_SP,SP); uc.mem_write(CTX+0x10,struct.pack('<I',77)); uc.reg_write(UC_ARM_REG_R4,CTX)
-    state={'malloc_fail':malloc_fail,'malloc_calls':0,'stop_at_exit':stop_at_exit,'parser_loop':False,'tick':100000,'flash':{SECTOR_A:bytearray(b'\xff'*MAX_IMAGE_SIZE),SECTOR_B:bytearray(b'\xff'*MAX_IMAGE_SIZE)},'send':[],'relay':[],'delay':[],'writes':[],'stop_on_delay':False}
+    state={'malloc_fail':malloc_fail,'malloc_calls':0,'stop_at_exit':stop_at_exit,'parser_loop':False,'tick':100000,'flash':{SECTOR_A:bytearray(b'\xff'*MAX_IMAGE_SIZE),SECTOR_B:bytearray(b'\xff'*MAX_IMAGE_SIZE)},'send':[],'relay':[],'delay':[],'writes':[],'stop_on_delay':False,'pending_task':False,'task_create_calls':[]}
     if flash:
         for k,v in flash.items(): state['flash'][k][:len(v)]=v
     def hook(uc,address,size,_):
@@ -64,12 +64,19 @@ def setup(flash=None, malloc_fail=False, stop_at_exit=True):
         elif name=='memcpy':
             d=uc.reg_read(UC_ARM_REG_R0); s=uc.reg_read(UC_ARM_REG_R1); n=uc.reg_read(UC_ARM_REG_R2); uc.mem_write(d,bytes(uc.mem_read(s,n))); uc.reg_write(UC_ARM_REG_R0,d); ret(uc)
         elif name=='malloc': state['malloc_calls']+=1; uc.reg_write(UC_ARM_REG_R0,0 if state['malloc_fail'] else HEAP); ret(uc)
+        elif name=='xTaskCreate':
+            entry=uc.reg_read(UC_ARM_REG_R0); depth=uc.reg_read(UC_ARM_REG_R2); param=uc.reg_read(UC_ARM_REG_R3); priority=struct.unpack('<I',uc.mem_read(sp,4))[0]
+            state['task_create_calls'].append((entry,depth,param,priority))
+            assert entry==(TASK|1),(hex(entry),hex(TASK|1)); assert depth==0x400,depth; assert param==0,param; assert priority==2,priority
+            state['pending_task']=True; uc.reg_write(UC_ARM_REG_R0,1); ret(uc)
         elif name=='flash_read':
             sector=uc.reg_read(UC_ARM_REG_R0); d=uc.reg_read(UC_ARM_REG_R1); n=uc.reg_read(UC_ARM_REG_R2); uc.mem_write(d,bytes(state['flash'][sector][:n])); uc.reg_write(UC_ARM_REG_R0,0); ret(uc)
         elif name=='flash_write':
             sector=uc.reg_read(UC_ARM_REG_R0); s=uc.reg_read(UC_ARM_REG_R1); n=uc.reg_read(UC_ARM_REG_R2); state['flash'][sector][:]=b'\xff'*MAX_IMAGE_SIZE; state['flash'][sector][:n]=uc.mem_read(s,n); state['writes'].append((sector,n)); uc.reg_write(UC_ARM_REG_R0,0); ret(uc)
         elif name=='delay':
             ms=uc.reg_read(UC_ARM_REG_R0); state['delay'].append(ms); state['tick']=(state['tick']+ms)&0xffffffff
+            if state['pending_task']:
+                uc.mem_write(LAZY_STATE,b'\0'*1152); uc.mem_write(DATA_PTR,struct.pack('<I',LAZY_STATE)); state['data_ptr']=LAZY_STATE; state['pending_task']=False
             if state['stop_on_delay']: uc.emu_stop()
             else: ret(uc)
         elif name=='relay': state['relay'].append((uc.reg_read(UC_ARM_REG_R0),uc.reg_read(UC_ARM_REG_R1))); uc.reg_write(UC_ARM_REG_R0,1); ret(uc)
