@@ -1,0 +1,11 @@
+Priority3=0.1.50-1.0.60
+ExactLocalSource=NOT_FOUND
+ExactPublicGitHistory=NOT_FOUND
+ExactPublicWebReference=NOT_FOUND
+CurrentPublicLegacyPath=404_FOR_REVIEWED_1.0.60_PATTERNS
+OwnerLabExact1.0.60=NONE
+CustomerExtraction=PROHIBITED
+Decision=SOURCE_PIN_BLOCKED
+NoDeviceIO=true
+NoFlash=true
+NoOTA=true

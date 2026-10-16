@@ -31,3 +31,44 @@ It still does not justify fabricating `1.0.60` bytes or using another version as
 3. If neither exists, dump a user-owned laboratory unit that is actually on `1.0.60` using a physical hardware recovery interface, then verify format/checksum/family before any write operation.
 
 No customer device was flashed, dumped, or reconfigured during this source-acquisition work.
+
+## 2026-10-17 exhaustive source-pin follow-up
+
+The Priority 3 fleet family `0.1.50-1.0.60` was rechecked without touching any customer device.
+The result remains **Source Pin blocked**.
+
+Read-only checks completed:
+
+- scanned all 327,944-byte `.fwr` files on the authorized new SFN Power/research VPS with both
+  known MTTL XOR keys; no exact 1.0.60 image was present;
+- checked the old production VPS for archived `.fwr` files in the relevant project/root areas;
+  none were present and no expensive full-disk scan was retained;
+- mirrored and searched full Git history of the major public `mttl_w01`, standalone, and related
+  power-strip repositories; historical stock assets found there are 1.0.66 or later standalone
+  derivatives, not exact vendor 1.0.60;
+- searched public web/GitHub references for `comMTTL-W01_1.0.60.fwr`,
+  `MTTL-W01_V1.0.60.fwr`, and the `0.1.50-1.0.60` tuple; no exact source was found;
+- inspected the available Voltra Android APK/native Flutter image and an unrelated public
+  power-strip APK; neither embeds an exact 1.0.60 FWR nor exposes a historical 1.0.60 archive;
+- rechecked the public legacy source host at `5.182.18.10` using the documented MEF Host header.
+  `/ota.bin` remains a current 327,944-byte image, while the known historical 1.0.60 filename/path
+  patterns return 404. This is not proof the old image never existed; it is proof it is not
+  available at those current public paths;
+- repeated the same bounded public-path check for the other currently unsupported fleet versions
+  1.0.58, 1.0.38, 1.0.62, 1.0.111, 1.0.114, 1.0.116, 1.0.141 and 1.0.145; no exact candidate was
+  found at the reviewed public paths;
+- checked SFN ownership metadata read-only: none of the ten exact `0.1.50-1.0.60` fleet devices is
+  in the owner's existing laboratory account. Customer devices are therefore explicitly excluded
+  from source extraction.
+
+Safety decision: **do not fabricate 1.0.60 from 1.0.66/1.0.105/1.0.146, do not substitute another
+version as rollback, and do not read/dump a customer strip merely to unblock the family.**
+
+The next valid source for this family is one of:
+
+1. an independently obtained exact archived vendor/public 1.0.60 FWR whose format/version/checksum
+   can be verified, or
+2. a physical read-only dump from an owner-controlled/dedicated laboratory unit that is genuinely
+   running 1.0.60.
+
+Until then, Priority 3 remains unsupported at Source Pin and receives no OTA target.
