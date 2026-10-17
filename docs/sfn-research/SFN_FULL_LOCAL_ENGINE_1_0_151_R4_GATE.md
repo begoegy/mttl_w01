@@ -7,7 +7,7 @@ Owner canary target, when the production server can be safely updated, is `New /
 ## Exact candidate
 
 Universal FWR: `comMTTL-W01_1.0.151-full-local-engine-universal-r4-a.fwr`
-SHA-256: `23a43d47c1a1308c366435494eadb91506e21be8f90775c272aa431de313739f`
+SHA-256: `44e46fa430d99492e37ca0ad50fdec3d8eefb7a8d4ac8abf5f8344fc05f4c36b`
 Size: `327944` bytes.
 Vendor-wrapped build SHA-256: `e70ba96726dc2a0093685fe5f5fb9e0bc8c71017a6676c51bf2abb3301a76098`.
 Both vendor and universal forms are reproducible byte-for-byte across independent A/B builds. The universal envelope changes only the Image2/FWR envelope/checksum; application bytes are identical.
