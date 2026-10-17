@@ -2,6 +2,8 @@
 
 Status: **LAB PASS / DO NOT FLASH / NOT PRODUCTION DEPLOYED**
 
+> **SUPERSEDED ROLLOUT DECISION:** Do **not** deploy server commit `40367fb` for this fix. Production server 1.6.9 stays unchanged. Native 2.0.13 now defers the existing `getinfo:all` response until relay work is physically stable, so it fits the historical server contract. See `SFN_NATIVE_LEGACY_SERVER_COMPAT_QA_2026-10-17.md`.
+
 ## Scope and safety boundary
 
 - Firmware worktree: `/srv/sfn-power-research/worktrees/sfn-native-firmware-20261017`
@@ -34,23 +36,13 @@ The first firmware admitted to the final-state protocol is **2.0.13**. 2.0.12 is
 - The confirmation queue is bounded to four remote commands, matching a four-outlet batch.
 - The native TCP socket now enables TCP keepalive (30 s idle, 10 s interval, 3 probes). This fixes the observed WAN-outage case where Wi-Fi can remain associated while the old TCP path is dead. A failed keepalive is reported through the existing socket error path, which closes the stale connection and reconnects with normal bounded backoff; no device reboot is required.
 
-## Server compatibility
+## Server compatibility — final decision
 
-The server hotfix was narrowed to an explicit capability allowlist:
+The earlier gated-server design is retained as research history only and is **not the rollout path**. Server branch `fix/native-control-confirm-20261017` / commit `40367fb` must not be deployed for this fix.
 
-`NATIVE_FINAL_STATE_CONFIRMATION_FIRMWARES = {"2.0.13"}`
+Production server 1.6.9 remains unchanged: it sends outlet commands, waits the historical `0.3 s`, then sends one `up:getinfo:all` and evaluates the complete report. Native 2.0.13 now remembers that normal refresh when relays are still moving and emits the same complete legacy-format report only after the relay queue is stable. A reconnect discards any deferred report from the old link.
 
-For legacy firmware, `set_outlets()` retains the historical behavior: send the commands, wait the existing 0.3 s settle interval, then perform one refresh. No global polling semantic is applied to 1.x devices.
-
-For 2.0.13, the server:
-
-1. sends the requested outlet commands;
-2. waits for a matching final ACK for every requested channel;
-3. only then requests a complete outlet report;
-4. succeeds only when that fresh complete report matches the requested final state;
-5. fails closed when final ACK/report confirmation does not arrive within the bounded transaction timeout.
-
-No MAC, device name, or New2 special case is used.
+Exact E2E against `/opt/sfn-power/sfn-power.pyz` (SHA-256 `828997ffa4ddf77fcefa1ae975e02a9daeb14b57dda9a33f942fd9177236908a`) passed with four 125 ms relay operations: the unchanged server returned `confirmed=true` and `applied=true` after about `0.514 s`. Production artifact SHA was unchanged before/after.
 
 ## Firmware host tests
 
@@ -72,11 +64,7 @@ The new final-state helper and simulator compile with host GCC `-Wall -Wextra -W
 
 ## Server tests
 
-Full suite against the gated server source:
-
-- **557 tests**
-- **0 failures**
-- PASS
+No production server code is changed by the final design. The earlier research-only gated server branch had 557/557 tests passing, but that branch is now superseded for rollout. The required compatibility proof is the unmodified-production-server E2E above.
 
 ## Latency-aware E2E
 
@@ -107,13 +95,13 @@ Dedicated final-state contract E2E PASS:
 
 Pinned Ameba toolchain, source-built Native profile, sensor + relay enabled, Boot Guard enabled, OTA runtime write disabled.
 
-Two clean builds after final source review were byte-identical:
+The final packaged FWR was built twice after the compatibility change and was byte-identical:
 
 - Version: `2.0.13`
-- FWR bytes: `315360`
-- FWR SHA-256: `33fa9cabede0fd144eaf77b2b9b668db86181497b6c7862c80e61c097d3aeda8`
-- ELF SHA-256: `8f68de1fcf180dc678f7182294257ebe00323dcaad9a6b5d762d07a8f4418a24`
-- Static gap to reserved MSP: `12920` bytes
+- FWR bytes: `315584`
+- FWR SHA-256: `6cfde9a985234fae7741ccc55c4f557f10b01d88688490aca442df43b00bf4f2`
+- BIN SHA-256: `e63a450ff480247307f1dd8ac103371ff5b85559604f3896701db81ad04563d9`
+- Static gap to reserved MSP: `12704` bytes
 - Reserved MSP: `4096` bytes
 - Initial RTOS heap: `39936` bytes
 - `ota_write_enabled=false`
@@ -121,13 +109,7 @@ Two clean builds after final source review were byte-identical:
 - setup ARM emulation success/failure cases: `2/2`
 - Image2 package round-trip: PASS
 
-Stack compile estimates from `-fstack-usage`:
-
-- relay task frame: `80` bytes; task allocation is 384 stack words (1536 bytes on Cortex-M3);
-- network worker frame: `1136` bytes; task allocation is 1536 stack words (6144 bytes);
-- largest individual compiled frame in the image: `publish_snapshots` at `2056` bytes.
-
-No compile warning is attributed to `sdk_worker.c`, `sfn_final_state.c`, `sdk_up_socket.c`, or `sfn_up_client.c`; the linker warning baseline is from the legacy Realtek SDK libraries/toolchain enum ABI warnings.
+Stack compile estimates remain within task allocations. The deferred-report helper frame is `1048` bytes; the network worker frame is `1136` bytes with a 6144-byte task allocation, and the existing `publish_snapshots` frame remains `2056` bytes. No compile warning is attributed to `sdk_worker.c` or `sdk_up_socket.c`.
 
 ## Recovery material
 
@@ -139,16 +121,14 @@ This is a recovery mechanism, **not a guarantee** if a new image fails before it
 
 ## Preserved lab artifact
 
-`/srv/sfn-power-research/lab-artifacts/sfn-native-final-state-reconnect-20261017/DO-NOT-FLASH-sfn-native-2.0.13-final-state-reconnect-lab.fwr`
-
-This path is lab-only and is not registered in the active production firmware catalog.
+The superseded older lab artifact must not be used for rollout. The current compatibility artifact is preserved separately after final commit and is not registered in the active production firmware catalog.
 
 ## Required physical rollout order (not executed)
 
-1. Back up production server state and deploy the **gated** server change first; verify legacy devices stay on the unchanged path.
+1. **No server deployment is required for this fix.** Production 1.6.9 stays unchanged.
 2. Do not flash any device until owner approval.
-3. With explicit approval, use New2 only as the physical 2.0.13 canary and verify the exact FWR SHA above before write.
-4. Physical checks must cover single outlet, all outlets, rapid commands, voltage guard, child lock, reconnect, **WAN loss then WAN recovery without power-cycling the strip**, schedules, and server/UI result consistency.
+3. With explicit approval, use New2 only as the physical 2.0.13 canary and verify the exact final FWR SHA immediately before write.
+4. Physical checks must cover single outlet, all outlets, rapid commands, Voltage Guard, child lock, reconnect, WAN loss then WAN recovery without power-cycling the strip, schedules, and server/UI result consistency.
 5. Stop and use the existing guarded recovery path if New2 fails any physical gate.
 
 Lab success is not physical success.

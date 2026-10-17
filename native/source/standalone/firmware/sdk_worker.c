@@ -65,6 +65,8 @@ static struct {
 #ifdef SFN_NATIVE_UP_ONLY
 static sfn_final_state up_final_state;
 static uint32_t up_link_epoch=1;
+static uint32_t up_getinfo_epoch;
+static uint8_t up_getinfo_pending;
 #endif
 static SemaphoreHandle_t relay_wake;
 static mttl_control relay_control;
@@ -192,17 +194,21 @@ static void protection_off_mask(uint8_t mask);
 #ifdef SFN_NATIVE_UP_ONLY
 extern const char mttl_firmware_version[];
 static void sfn_backend_text(uint32_t ip,char out[16]){snprintf(out,16,"%lu.%lu.%lu.%lu",(unsigned long)(ip>>24),(unsigned long)((ip>>16)&255u),(unsigned long)((ip>>8)&255u),(unsigned long)(ip&255u));}
+static size_t sfn_up_encode_current_report(mttl_device_app *d,char *out,size_t cap){
+ uint32_t now=clock_ms(0);unsigned i;uint8_t known,on;sfn_up_outlet x[4];
+ taskENTER_CRITICAL();known=relay_known;on=relay_on;taskEXIT_CRITICAL();
+ for(i=0;i<4;i++){int32_t power=0,temp=0,energy=(int32_t)d->settings.energy_wh[i];
+  (void)mttl_sample_read(&d->samples.power[i],now,MTTL_SENSOR_MAX_AGE_MS,&power);
+  if(mttl_sample_read(&d->samples.temperature[i],now,MTTL_SENSOR_MAX_AGE_MS,&temp))temp/=10;else temp=0;
+  (void)mttl_sample_read(&d->samples.meter[i],now,MTTL_SENSOR_MAX_AGE_MS,&energy);
+  x[i].channel=(uint8_t)(i+1);x[i].on=(known&(1u<<i))&&((on&(1u<<i))!=0);x[i].runtime=(int32_t)(now/1000u);x[i].state=(known&(1u<<i))?1:0;x[i].power_mw=power;x[i].energy_wh=energy<0?0:(uint32_t)energy;x[i].temperature_c=temp;x[i].overload="0";x[i].overheat="0";}
+ return sfn_up_encode_getinfo(out,cap,x);
+}
 static size_t sfn_up_handle(void *context,const sfn_up_command *command,char *out,size_t cap){
- mttl_device_app *d=context;uint32_t now=clock_ms(0);unsigned i;int32_t value;uint8_t known,on;
+ mttl_device_app *d=context;uint32_t now=clock_ms(0);int32_t value;
  if(!d||!command||!out)return 0;
  switch(command->type){
-  case SFN_UP_CMD_GETINFO_ALL:{sfn_up_outlet x[4];uint8_t busy;taskENTER_CRITICAL();known=relay_known;on=relay_on;busy=(uint8_t)(relay_busy||control_pending);taskEXIT_CRITICAL();if(busy)return 0;
-   for(i=0;i<4;i++){int32_t power=0,temp=0,energy=(int32_t)d->settings.energy_wh[i];
-    (void)mttl_sample_read(&d->samples.power[i],now,MTTL_SENSOR_MAX_AGE_MS,&power);
-    if(mttl_sample_read(&d->samples.temperature[i],now,MTTL_SENSOR_MAX_AGE_MS,&temp))temp/=10;else temp=0;
-    (void)mttl_sample_read(&d->samples.meter[i],now,MTTL_SENSOR_MAX_AGE_MS,&energy);
-    x[i].channel=(uint8_t)(i+1);x[i].on=(known&(1u<<i))&&((on&(1u<<i))!=0);x[i].runtime=(int32_t)(now/1000u);x[i].state=(known&(1u<<i))?1:0;x[i].power_mw=power;x[i].energy_wh=energy<0?0:(uint32_t)energy;x[i].temperature_c=temp;x[i].overload="0";x[i].overheat="0";}
-   return sfn_up_encode_getinfo(out,cap,x);}
+  case SFN_UP_CMD_GETINFO_ALL:{uint8_t busy;taskENTER_CRITICAL();busy=(uint8_t)(relay_busy||control_pending);if(busy){up_getinfo_pending=1;up_getinfo_epoch=up_link_epoch;}taskEXIT_CRITICAL();if(busy)return 0;return sfn_up_encode_current_report(d,out,cap);}
   case SFN_UP_CMD_ONOFF:
    (void)control_enqueue(command->channel-1,command->on,0);return 0;
   case SFN_UP_CMD_VOLTAGE:
@@ -235,14 +241,19 @@ static size_t sfn_up_handle(void *context,const sfn_up_command *command,char *ou
   default:return 0;
  }
 }
-static void sfn_up_bump_epoch(void){taskENTER_CRITICAL();if(++up_link_epoch==0)++up_link_epoch;taskEXIT_CRITICAL();}
+static void sfn_up_bump_epoch(void){taskENTER_CRITICAL();if(++up_link_epoch==0)++up_link_epoch;up_getinfo_pending=0;up_getinfo_epoch=0;taskEXIT_CRITICAL();}
 static void sfn_up_disconnect(void){if(device.up.state!=SFN_UP_LINK_OFF){sfn_up_bump_epoch();sfn_up_client_reset(&device.up,&up_io);}}
+static void sfn_up_deferred_getinfo(void){char frame[SFN_UP_TX_CAP];size_t n;uint32_t epoch;uint8_t pending,busy;
+ taskENTER_CRITICAL();epoch=up_link_epoch;pending=(uint8_t)(up_getinfo_pending&&up_getinfo_epoch==epoch);busy=(uint8_t)(relay_busy||control_pending);taskEXIT_CRITICAL();
+ if(!pending||busy||!sfn_up_client_ready(&device.up))return;n=sfn_up_encode_current_report(&device,frame,sizeof(frame));if(!n)return;
+ if(sfn_up_client_publish(&device.up,frame,n)){taskENTER_CRITICAL();if(up_getinfo_pending&&up_getinfo_epoch==epoch)up_getinfo_pending=0;taskEXIT_CRITICAL();}
+}
 static void sfn_up_final_confirmations(void){sfn_final_state_ack ack;uint32_t epoch;char frame[48];size_t n;int have;
  taskENTER_CRITICAL();epoch=up_link_epoch;have=sfn_final_state_peek_current(&up_final_state,epoch,&ack);taskEXIT_CRITICAL();
  if(!have||!sfn_up_client_ready(&device.up))return;n=sfn_up_encode_onoff_ack(frame,sizeof(frame),ack.channel,ack.on);if(!n)return;
  if(sfn_up_client_publish(&device.up,frame,n)){taskENTER_CRITICAL();sfn_final_state_consume(&up_final_state);taskEXIT_CRITICAL();}
 }
-static void sfn_up_service(int online){char host[16];uint32_t ip=device.settings.sfn_backend_ipv4;sfn_up_link_state before,after;if(!online||!ip||!identity[0]){sfn_up_disconnect();return;}sfn_backend_text(ip,host);before=device.up.state;(void)sfn_up_client_step(&device.up,&up_io,1,host,device.settings.sfn_backend_port,clock_ms(0),"lgutap",identity,mttl_firmware_version,sfn_up_handle,&device);after=device.up.state;if((before==SFN_UP_LINK_ONLINE)!=(after==SFN_UP_LINK_ONLINE))sfn_up_bump_epoch();if(after==SFN_UP_LINK_ONLINE)sfn_up_final_confirmations();}
+static void sfn_up_service(int online){char host[16];uint32_t ip=device.settings.sfn_backend_ipv4;sfn_up_link_state before,after;if(!online||!ip||!identity[0]){sfn_up_disconnect();return;}sfn_backend_text(ip,host);before=device.up.state;(void)sfn_up_client_step(&device.up,&up_io,1,host,device.settings.sfn_backend_port,clock_ms(0),"lgutap",identity,mttl_firmware_version,sfn_up_handle,&device);after=device.up.state;if((before==SFN_UP_LINK_ONLINE)!=(after==SFN_UP_LINK_ONLINE))sfn_up_bump_epoch();if(after==SFN_UP_LINK_ONLINE){sfn_up_deferred_getinfo();sfn_up_final_confirmations();}}
 static void sfn_up_physical_events(void){unsigned i;char frame[48];size_t n;if(relay_busy||control_pending||!up_physical_pending)return;for(i=0;i<5;i++)if(up_physical_pending&(1u<<i)){int state=i?((relay_on&(1u<<(i-1)))!=0):(relay_on==15);n=sfn_up_encode_event(frame,sizeof(frame),i,state);if(n&&sfn_up_client_publish(&device.up,frame,n))up_physical_pending=(uint8_t)(up_physical_pending&~(1u<<i));break;}}
 #endif
 static int control_enqueue(unsigned channel,unsigned on,int local){int ok=0;if(channel>4||on>1)return 0;taskENTER_CRITICAL();if(worker_started&&relay_wake&&(local||published.state==MTTL_NET_ONLINE)&&!energy_barrier_state&&!occupied&&!config_occupied&&control_pending<4&&device.hardware.verified&&!relay_fault&&!(on&&(channel==4?sfn_voltage_guard_blocked_mask(&voltage_guard_state,&device.settings.voltage_guard)!=0:(sfn_voltage_guard_blocked_mask(&voltage_guard_state,&device.settings.voltage_guard)&(1u<<channel))))){unsigned tail=(control_head+control_pending)&3;
