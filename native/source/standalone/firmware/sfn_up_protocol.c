@@ -11,6 +11,31 @@ static int clean(const char *line,size_t size,char out[129]){
     return n>0;
 }
 static int exact(const char *a,const char *b){return strcmp(a,b)==0;}
+static int dec_u32(const char *p,const char **end,uint32_t *value){
+    uint64_t v=0;unsigned n=0;if(!p||!*p)return 0;
+    while(*p>='0'&&*p<='9'){if(n++>9)return 0;v=v*10u+(unsigned)(*p-'0');if(v>0xffffffffULL)return 0;++p;}
+    if(!n)return 0;
+    *value=(uint32_t)v;
+    if(end)*end=p;
+    return 1;
+}
+static int parse_vguard(const char *p,sfn_up_command *out){
+    uint32_t v[5];unsigned i;const char *e=p;
+    for(i=0;i<5;i++){if(!dec_u32(e,&e,&v[i]))return 0;if(i<4){if(*e!=':')return 0;++e;}else if(*e)return 0;}
+    if(!v[0]||v[0]>0x7fffffffu)return 0;
+    out->type=SFN_UP_CMD_VGUARD_SET;out->revision=v[0];out->flags=v[1];out->thresholds=v[2];out->timing=v[3];out->recovery_seconds=v[4];return 1;
+}
+static int dec_i32(const char *p,const char **end,int32_t *value){
+    int neg=0;uint32_t mag;const char *e;if(!p)return 0;if(*p=='-'){neg=1;++p;}
+    if(!dec_u32(p,&e,&mag)||mag>(neg?2147483648u:2147483647u))return 0;
+    *value=neg?(mag==2147483648u?(-2147483647-1):-(int32_t)mag):(int32_t)mag;if(end)*end=e;return 1;
+}
+static int next_u32(const char **p,uint32_t *v,int last){const char *e;if(!dec_u32(*p,&e,v))return 0;if(last){if(*e)return 0;}else{if(*e!=':')return 0;e++;}*p=e;return 1;}
+static int next_i32(const char **p,int32_t *v,int last){const char *e;if(!dec_i32(*p,&e,v))return 0;if(last){if(*e)return 0;}else{if(*e!=':')return 0;e++;}*p=e;return 1;}
+static int parse_clock(const char *p,sfn_up_command *o){uint32_t epoch,t1,t2;int32_t off,o1,o2;if(!next_u32(&p,&epoch,0)||!next_i32(&p,&off,0)||!next_u32(&p,&t1,0)||!next_i32(&p,&o1,0)||!next_u32(&p,&t2,0)||!next_i32(&p,&o2,1))return 0;if(off< -32768||off>32767||o1< -32768||o1>32767||o2< -32768||o2>32767)return 0;o->type=SFN_UP_CMD_CLOCK_SYNC;o->epoch=epoch;o->offset_minutes=(int16_t)off;o->transition1_epoch=t1;o->transition1_offset_minutes=(int16_t)o1;o->transition2_epoch=t2;o->transition2_offset_minutes=(int16_t)o2;return 1;}
+static int parse_begin(const char *p,sfn_up_command *o){uint32_t g,c;if(!next_u32(&p,&g,0)||!next_u32(&p,&c,1)||c>255)return 0;o->type=SFN_UP_CMD_SCHEDULE_BEGIN;o->generation=g;o->count=(uint8_t)c;return 1;}
+static int parse_item(const char *p,sfn_up_command *o){uint32_t v[7];unsigned i;for(i=0;i<7;i++)if(!next_u32(&p,&v[i],i==6))return 0;if(v[0]>255||v[1]>255||v[2]>255||v[3]>255||v[4]>65535||v[5]>65535||v[6]>1)return 0;o->type=SFN_UP_CMD_SCHEDULE_ITEM;o->slot=(uint8_t)v[0];o->outlet=(uint8_t)v[1];o->repeat=(uint8_t)v[2];o->days=(uint8_t)v[3];o->date_days=(uint16_t)v[4];o->minute=(uint16_t)v[5];o->on=(uint8_t)v[6];return 1;}
+static int parse_commit(const char *p,sfn_up_command *o){uint32_t g;if(!next_u32(&p,&g,1))return 0;o->type=SFN_UP_CMD_SCHEDULE_COMMIT;o->generation=g;return 1;}
 static int dec_mask(const char *p,unsigned *value){
     unsigned v=0,n=0;if(!p||!*p)return 0;while(*p){if(*p<'0'||*p>'9'||n++>2)return 0;v=v*10u+(unsigned)(*p-'0');++p;}if(v>31)return 0;*value=v;return 1;
 }
@@ -20,6 +45,12 @@ int sfn_up_parse_command(const char *line,size_t size,sfn_up_command *out){
     if(exact(b,"up:power_report:1:vol")){out->type=SFN_UP_CMD_VOLTAGE;out->channel=1;return 1;}
     if(exact(b,"up:query:wifirssi")){out->type=SFN_UP_CMD_RSSI;return 1;}
     if(exact(b,"up:childlock")){out->type=SFN_UP_CMD_CHILDLOCK_GET;return 1;}
+    if(!strncmp(b,"up:vguard:",10)&&parse_vguard(b+10,out))return 1;
+    if(!strncmp(b,"up:sfn:90:",10)&&parse_clock(b+10,out))return 1;
+    if(!strncmp(b,"up:sfn:91:",10)&&parse_begin(b+10,out))return 1;
+    if(!strncmp(b,"up:sfn:92:",10)&&parse_item(b+10,out))return 1;
+    if(!strncmp(b,"up:sfn:93:",10)&&parse_commit(b+10,out))return 1;
+    if(exact(b,"up:sfn:94")){out->type=SFN_UP_CMD_SCHEDULE_STATUS;return 1;}
     if(!strncmp(b,"up:childlock:",13)&&dec_mask(b+13,&mask)){out->type=SFN_UP_CMD_CHILDLOCK_SET;out->mask=(uint8_t)mask;return 1;}
     if(!strncmp(b,"up:onoff:",9)&&b[9]>='1'&&b[9]<='4'&&b[10]==':'){
         const char *v=b+11;if(exact(v,"on")||exact(v,"off")){out->type=SFN_UP_CMD_ONOFF;out->channel=(uint8_t)(b[9]-'0');out->on=(uint8_t)exact(v,"on");return 1;}
@@ -35,6 +66,10 @@ size_t sfn_up_encode_event(char *out,size_t cap,unsigned ch,int on){int n;if(ch>
 size_t sfn_up_encode_voltage(char *out,size_t cap,unsigned ch,int32_t mv){int n;if(ch<1||ch>5||mv<0)return 0;n=snprintf(out,cap,"up:power_report:%u:%ld\r\n",ch,(long)mv);return finish(out,cap,n);}
 size_t sfn_up_encode_rssi(char *out,size_t cap,int rssi){int n;if(rssi>0||rssi< -127)return 0;n=snprintf(out,cap,"up:query:%d\r\n",rssi);return finish(out,cap,n);}
 size_t sfn_up_encode_childlock(char *out,size_t cap,unsigned mask){int n;if(mask>31)return 0;n=snprintf(out,cap,"up:cl:%u\r\n",mask);return finish(out,cap,n);}
+size_t sfn_up_encode_vguard_ack(char *out,size_t cap,uint32_t revision){int n;if(!revision||revision>0x7fffffffu)return 0;n=snprintf(out,cap,"up:vguard:%lu\r\n",(unsigned long)revision);return finish(out,cap,n);}
+size_t sfn_up_encode_clock_ack(char *out,size_t cap,uint32_t epoch){int n;n=snprintf(out,cap,"up:sfn:90:%lu:0\r\n",(unsigned long)epoch);return finish(out,cap,n);}
+size_t sfn_up_encode_schedule_commit_ack(char *out,size_t cap,uint32_t generation,unsigned count){int n;if(generation>0x7fffffffu||count>8)return 0;n=snprintf(out,cap,"up:sfn:93:%lu:%u\r\n",(unsigned long)generation,count);return finish(out,cap,n);}
+size_t sfn_up_encode_schedule_status(char *out,size_t cap,uint32_t generation,unsigned count,int clock_valid,int storage_valid){int n;unsigned meta;if(count>8)return 0;meta=count|(clock_valid?0x100u:0u)|(storage_valid?0x200u:0u);n=snprintf(out,cap,"up:sfn:94:%lu:%u\r\n",(unsigned long)generation,meta);return finish(out,cap,n);}
 size_t sfn_up_encode_getinfo(char *out,size_t cap,const sfn_up_outlet x[4]){
     size_t used=0;unsigned i;uint32_t energy=0;int64_t power=0;int n;if(!out||!x||cap<16)return 0;
     n=snprintf(out,cap,"up:getinfo:");if(n<0||(size_t)n>=cap)return 0;used=(size_t)n;

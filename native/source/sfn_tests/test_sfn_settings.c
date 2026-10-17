@@ -4,45 +4,28 @@
 #include <string.h>
 #include "../standalone/firmware/settings.h"
 #include "../standalone/firmware/settings_record.h"
-
-static void same_features(const mttl_settings *a,const mttl_settings *b){
- assert(a->child_lock_mask==b->child_lock_mask);
- assert(!memcmp(&a->voltage_guard,&b->voltage_guard,sizeof(a->voltage_guard)));
-}
-static void same_sfn7(const mttl_settings *a,const mttl_settings *b){
- same_features(a,b);assert(a->sfn_backend_ipv4==b->sfn_backend_ipv4);assert(a->sfn_backend_port==b->sfn_backend_port);
-}
-static size_t wrap_v3(uint8_t *storage,size_t cap,const uint8_t *body,size_t n){
- assert(cap>=n+38);storage[0]=3;storage[1]=(uint8_t)n;storage[2]=(uint8_t)(n>>8);memcpy(storage+3,body,n);memset(storage+3+n,0,35);storage[n+36]=0;storage[n+37]=0;return n+38;
-}
+static void same_features(const mttl_settings *a,const mttl_settings *b){assert(a->child_lock_mask==b->child_lock_mask);assert(!memcmp(&a->voltage_guard,&b->voltage_guard,sizeof(a->voltage_guard)));}
+static void same_sfn(const mttl_settings *a,const mttl_settings *b){same_features(a,b);assert(a->sfn_backend_ipv4==b->sfn_backend_ipv4);assert(a->sfn_backend_port==b->sfn_backend_port);assert(!memcmp(&a->sfn_schedule,&b->sfn_schedule,sizeof(a->sfn_schedule)));}
+static size_t wrap_v3(uint8_t *storage,size_t cap,const uint8_t *body,size_t n){assert(cap>=n+38);storage[0]=3;storage[1]=(uint8_t)n;storage[2]=(uint8_t)(n>>8);memcpy(storage+3,body,n);memset(storage+3+n,0,35);storage[n+36]=0;storage[n+37]=0;return n+38;}
+static void put16(uint8_t *p,uint16_t v){p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);}static void put32(uint8_t *p,uint32_t v){unsigned i;for(i=0;i<4;i++)p[i]=(uint8_t)(v>>(8*i));}
+static size_t legacy_v7(const uint8_t *v9,size_t n,uint8_t *out,uint8_t trip,uint8_t recover,uint16_t low,uint16_t high,uint16_t recover_low,uint16_t recover_high,uint32_t ip,uint16_t port){size_t base=n-39,k=base;memcpy(out,v9,base);out[0]=7;out[k++]=21;out[k++]=1;out[k++]=trip;out[k++]=recover;put16(out+k,low);k+=2;put16(out+k,high);k+=2;put16(out+k,recover_low);k+=2;put16(out+k,recover_high);k+=2;put32(out+k,ip);k+=4;put16(out+k,port);k+=2;assert(k==base+18);return k;}
+static size_t legacy_v6(const uint8_t *v9,size_t n,uint8_t *out,uint8_t trip,uint8_t recover,uint16_t low,uint16_t high,uint16_t recover_low,uint16_t recover_high){size_t base=n-39,k=base;memcpy(out,v9,base);out[0]=6;out[k++]=21;out[k++]=1;out[k++]=trip;out[k++]=recover;put16(out+k,low);k+=2;put16(out+k,high);k+=2;put16(out+k,recover_low);k+=2;put16(out+k,recover_high);k+=2;assert(k==base+12);return k;}
 int main(void){
- mttl_settings a,b,c;uint8_t body[1024],v6[1024],v5[1024],storage[1200],slot[MTTL_SETTINGS_SLOT],out[1200];size_t n,n6,n5,sn,on;uint32_t seq;size_t physical;
- mttl_settings_default(&a);a.child_lock_mask=21;a.voltage_guard.enabled=1;a.voltage_guard.low_trip_dv=1750;a.voltage_guard.high_trip_dv=2550;a.voltage_guard.recover_low_dv=1900;a.voltage_guard.recover_high_dv=2450;a.voltage_guard.trip_samples=3;a.voltage_guard.recover_samples=4;
- a.sfn_backend_ipv4=0x0a010203u;a.sfn_backend_port=10086;
+ mttl_settings a,b,c;uint8_t body[1024],v8[1024],v7[1024],v6[1024],v5[1024],storage[1200],slot[MTTL_SETTINGS_SLOT],out[1200];size_t n,n8,n7,n6,n5,sn,on,base;uint32_t seq;size_t physical;
+ mttl_settings_default(&a);a.child_lock_mask=21;a.voltage_guard.enabled=1;a.voltage_guard.low_trip_dv=1750;a.voltage_guard.high_trip_dv=2550;a.voltage_guard.hysteresis_dv=100;a.voltage_guard.trip_hold_ds=200;a.voltage_guard.recovery_seconds=30;a.voltage_guard.protected_mask=0x0b;a.sfn_backend_ipv4=0x0a010203u;a.sfn_backend_port=10086;
  a.schedule.timezone=120;a.schedule.rules[0].minute=123;a.schedule.rules[0].mode=129;a.schedule.rules[0].channel=2;a.schedule.rules[0].on=1;
- assert(mttl_settings_valid(&a));n=mttl_settings_pack(&a,body,sizeof(body));assert(n&&body[0]==7);assert(mttl_settings_unpack(body,n,&b));same_sfn7(&a,&b);assert(!memcmp(&a.schedule,&b.schedule,sizeof(a.schedule)));
-
- /* Legacy v6 retains voltage/child features but defaults to unprovisioned SFN backend. */
- memcpy(v6,body,n-6);n6=n-6;v6[0]=6;assert(mttl_settings_unpack(v6,n6,&c));same_features(&a,&c);assert(c.sfn_backend_ipv4==0&&c.sfn_backend_port==10086);
- /* Legacy v5 remains accepted and gets safe SFN defaults. */
- memcpy(v5,body,n-18);n5=n-18;v5[0]=5;assert(mttl_settings_unpack(v5,n5,&c));assert(c.child_lock_mask==0&&c.voltage_guard.enabled==0&&c.sfn_backend_ipv4==0&&c.sfn_backend_port==10086);assert(!memcmp(&a.schedule,&c.schedule,sizeof(a.schedule)));
-
- sn=mttl_settings_storage_pack(&a,storage,sizeof(storage));assert(sn&&storage[0]==3&&storage[3]==7);
- memset(slot,0xaa,sizeof(slot));assert(mttl_settings_encode(slot,storage,sn,77));slot[MTTL_SETTINGS_SLOT-1]=0;
- assert(slot[16]==4);assert(!memcmp(slot+1640,"SC01",4));assert(!memcmp(slot+1720,"SFN2",4));
- assert(mttl_settings_validate(slot,&seq,&physical)&&seq==77);
- assert(mttl_settings_extract(slot,out,sizeof(out),&on));assert(mttl_settings_storage_unpack(out,on,&b));same_sfn7(&a,&b);assert(!memcmp(&a.schedule,&b.schedule,sizeof(a.schedule)));
-
- /* Sidecar corruption must invalidate the complete atomic record. */
+ a.sfn_schedule.generation=123;a.sfn_schedule.transition1_epoch=1790000000u;a.sfn_schedule.transition2_epoch=1800000000u;a.sfn_schedule.offset_minutes=120;a.sfn_schedule.transition1_offset_minutes=180;a.sfn_schedule.transition2_offset_minutes=120;a.sfn_schedule.count=1;a.sfn_schedule.valid=1;
+ assert(mttl_settings_valid(&a));n=mttl_settings_pack(&a,body,sizeof(body));assert(n&&body[0]==9);assert(mttl_settings_unpack(body,n,&b));same_sfn(&a,&b);assert(!memcmp(&a.schedule,&b.schedule,sizeof(a.schedule)));
+ /* Exact v8 = v9 without 20-byte schedule metadata. */
+ n8=n-20;memcpy(v8,body,n8);v8[0]=8;assert(mttl_settings_unpack(v8,n8,&c));same_features(&a,&c);assert(c.sfn_backend_ipv4==a.sfn_backend_ipv4&&c.sfn_backend_port==10086&&!c.sfn_schedule.valid);
+ n7=legacy_v7(body,n,v7,3,4,1750,2550,1900,2450,a.sfn_backend_ipv4,a.sfn_backend_port);assert(mttl_settings_unpack(v7,n7,&c));assert(c.child_lock_mask==21&&c.sfn_backend_ipv4==a.sfn_backend_ipv4&&c.sfn_backend_port==10086&&!c.sfn_schedule.valid);assert(c.voltage_guard.hysteresis_dv==150&&c.voltage_guard.trip_hold_ds==200&&c.voltage_guard.recovery_seconds==30&&c.voltage_guard.protected_mask==15);
+ n6=legacy_v6(body,n,v6,2,3,1800,2500,1900,2450);assert(mttl_settings_unpack(v6,n6,&c));assert(c.sfn_backend_ipv4==0&&c.sfn_backend_port==10086&&c.child_lock_mask==21&&!c.sfn_schedule.valid);assert(c.voltage_guard.trip_hold_ds==100&&c.voltage_guard.recovery_seconds==20&&c.voltage_guard.protected_mask==15);
+ base=n-39;memcpy(v5,body,base);v5[0]=5;n5=base;assert(mttl_settings_unpack(v5,n5,&c));assert(c.child_lock_mask==0&&c.voltage_guard.enabled==0&&c.sfn_backend_ipv4==0&&!c.sfn_schedule.valid);assert(!memcmp(&a.schedule,&c.schedule,sizeof(a.schedule)));
+ sn=mttl_settings_storage_pack(&a,storage,sizeof(storage));assert(sn&&storage[0]==3&&storage[3]==9);memset(slot,0xaa,sizeof(slot));assert(mttl_settings_encode(slot,storage,sn,77));slot[MTTL_SETTINGS_SLOT-1]=0;assert(slot[16]==4);assert(!memcmp(slot+1640,"SC01",4));assert(!memcmp(slot+1720,"SFN4",4));assert(mttl_settings_validate(slot,&seq,&physical)&&seq==77);assert(mttl_settings_extract(slot,out,sizeof(out),&on));assert(mttl_settings_storage_unpack(out,on,&b));same_sfn(&a,&b);assert(!memcmp(&a.schedule,&b.schedule,sizeof(a.schedule)));
  slot[1724]^=1;assert(!mttl_settings_validate(slot,&seq,&physical));slot[1724]^=1;assert(mttl_settings_validate(slot,&seq,&physical));
-
- /* A legacy SFN1/v6 sidecar remains readable. */
- sn=wrap_v3(storage,sizeof(storage),v6,n6);memset(slot,0xff,sizeof(slot));assert(mttl_settings_encode(slot,storage,sn,78));slot[MTTL_SETTINGS_SLOT-1]=0;assert(!memcmp(slot+1720,"SFN1",4));assert(mttl_settings_extract(slot,out,sizeof(out),&on));assert(mttl_settings_storage_unpack(out,on,&b));same_features(&a,&b);assert(b.sfn_backend_ipv4==0&&b.sfn_backend_port==10086);
-
- /* Legacy v5 storage remains extractable with no SFN sidecar. */
- sn=wrap_v3(storage,sizeof(storage),v5,n5);memset(slot,0xff,sizeof(slot));assert(mttl_settings_encode(slot,storage,sn,79));slot[MTTL_SETTINGS_SLOT-1]=0;assert(slot[16]==4);assert(!memcmp(slot+1640,"SC01",4));assert(slot[1720]==0xff);assert(mttl_settings_extract(slot,out,sizeof(out),&on));assert(mttl_settings_storage_unpack(out,on,&b));assert(b.child_lock_mask==0&&b.voltage_guard.enabled==0&&b.sfn_backend_ipv4==0&&b.sfn_backend_port==10086);
-
- /* Invalid backend addresses are rejected; unprovisioned zero is allowed. */
- a.sfn_backend_ipv4=0x7f000001u;assert(!mttl_settings_valid(&a));a.sfn_backend_ipv4=0xe0000001u;assert(!mttl_settings_valid(&a));a.sfn_backend_ipv4=0;assert(mttl_settings_valid(&a));
- puts("SFN_SETTINGS_SIDECAR_V7_TESTS=PASS");return 0;
+ sn=wrap_v3(storage,sizeof(storage),v8,n8);memset(slot,0xff,sizeof(slot));assert(mttl_settings_encode(slot,storage,sn,78));slot[MTTL_SETTINGS_SLOT-1]=0;assert(!memcmp(slot+1720,"SFN3",4));assert(mttl_settings_extract(slot,out,sizeof(out),&on));assert(mttl_settings_storage_unpack(out,on,&b));assert(!b.sfn_schedule.valid&&b.sfn_backend_ipv4==a.sfn_backend_ipv4&&b.voltage_guard.protected_mask==a.voltage_guard.protected_mask);
+ sn=wrap_v3(storage,sizeof(storage),v7,n7);memset(slot,0xff,sizeof(slot));assert(mttl_settings_encode(slot,storage,sn,79));slot[MTTL_SETTINGS_SLOT-1]=0;assert(!memcmp(slot+1720,"SFN2",4));assert(mttl_settings_extract(slot,out,sizeof(out),&on));assert(mttl_settings_storage_unpack(out,on,&b));assert(!b.sfn_schedule.valid&&b.voltage_guard.hysteresis_dv==150);
+ sn=wrap_v3(storage,sizeof(storage),v6,n6);memset(slot,0xff,sizeof(slot));assert(mttl_settings_encode(slot,storage,sn,80));slot[MTTL_SETTINGS_SLOT-1]=0;assert(!memcmp(slot+1720,"SFN1",4));assert(mttl_settings_extract(slot,out,sizeof(out),&on));assert(mttl_settings_storage_unpack(out,on,&b));assert(!b.sfn_schedule.valid&&b.sfn_backend_ipv4==0);
+ sn=wrap_v3(storage,sizeof(storage),v5,n5);memset(slot,0xff,sizeof(slot));assert(mttl_settings_encode(slot,storage,sn,81));slot[MTTL_SETTINGS_SLOT-1]=0;assert(!memcmp(slot+1640,"SC01",4));assert(slot[1720]==0xff);assert(mttl_settings_extract(slot,out,sizeof(out),&on));assert(mttl_settings_storage_unpack(out,on,&b));assert(!b.sfn_schedule.valid&&b.child_lock_mask==0);
+ puts("SFN_SETTINGS_SIDECAR_V9_DST_MIGRATION_TESTS=PASS");return 0;
 }

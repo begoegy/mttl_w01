@@ -29,6 +29,7 @@ unsigned mttl_schedule_tick(mttl_schedule_state *s,const mttl_schedule_config *c
   if(mode==2&&!(r->day&(1u<<weekday)))continue;
   if(mode==3&&r->day!=day)continue;
   if(mode==4&&day!=month_days(year,month))continue;
-  if(!mode)continue;bits=r->channel==4?15:1u<<r->channel;mask|=bits;value=(value&~bits)|(r->on?bits:0);
+  if(!mode)continue;
+  bits=r->channel==4?15:1u<<r->channel;mask|=bits;value=(value&~bits)|(r->on?bits:0);
  }s->pending=(uint8_t)mask;s->on=(uint8_t)value;*on=value;return mask;
 }

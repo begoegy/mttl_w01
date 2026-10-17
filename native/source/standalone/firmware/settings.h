@@ -6,6 +6,7 @@
 #include "scheduler.h"
 #include "sfn_voltage_guard.h"
 #include "sfn_child_lock.h"
+#include "sfn_schedule_meta.h"
 typedef struct {
     char device[65],channel[4][65],ssid[33],wifi_password[65];
     char broker[254],mqtt_user[65],mqtt_password[65],topic[65];
@@ -21,6 +22,7 @@ typedef struct {
     uint8_t child_lock_mask;
     uint32_t sfn_backend_ipv4;
     uint16_t sfn_backend_port;
+    sfn_schedule_meta sfn_schedule;
 } mttl_settings;
 /* Versioned length-prefixed encoding, never raw C structure/padding. */
 #define MTTL_SETTINGS_BODY_MAX 1024

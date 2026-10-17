@@ -84,7 +84,7 @@ if args.standalone:
  sources.append(ROOT/'standalone/firmware/sdk_dhcp.c')
  sources.append(ROOT/'standalone/firmware/sdk_httpd_core.c')
  sources.append(ROOT/'standalone/firmware/sdk_worker.c')
- for name in ('meter_probe','meter_bus','meter_init','meter_convert','sdk_meter','sdk_energy','sdk_memory','sdk_relay','sdk_sse','sfn_voltage_guard','sfn_child_lock','sfn_backend','sfn_up_protocol','sfn_up_client'):
+ for name in ('meter_probe','meter_bus','meter_init','meter_convert','sdk_meter','sdk_energy','sdk_memory','sdk_relay','sdk_sse','sfn_voltage_guard','sfn_voltage_policy','sfn_child_lock','sfn_backend','sfn_schedule_meta','sfn_schedule_sync','sfn_up_protocol','sfn_up_client'):
   sources.append(ROOT/'standalone/firmware'/(name+'.c'))
  sources.append(ROOT/'standalone/firmware/wifi_form.c')
  sources.append(ROOT/'standalone/firmware/sdk_http_io.c')

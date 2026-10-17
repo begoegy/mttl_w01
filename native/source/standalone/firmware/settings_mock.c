@@ -81,7 +81,7 @@ unsigned mttl_settings_mock_tests(void){
     for(i=0;i<64;i++){out.device[i]='a';out.channel[0][i]=out.channel[1][i]=out.channel[2][i]=out.channel[3][i]='a';out.wifi_password[i]='a';out.mqtt_user[i]=out.mqtt_password[i]=out.topic[i]='a';}
     for(i=0;i<32;i++)out.ssid[i]='a';for(i=0;i<253;i++)out.broker[i]='a';
     size=mttl_settings_storage_pack(&out,loaded,sizeof(loaded));
-    if(size!=990||!mttl_settings_storage_unpack(loaded,size,&out))++failed;
+    if(size!=1011||!mttl_settings_storage_unpack(loaded,size,&out))++failed;
     /* Recreate the malformed unknown-schema record test input. */
     n=mttl_settings_pack(&s,body,sizeof(body));
     body[0]=2;
