@@ -7,12 +7,13 @@ import json
 import re
 import argparse
 import subprocess
-parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');options=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');parser.add_argument('--sfn-native',action='store_true');options=parser.parse_args()
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'standalone/results/sdk'
 if options.ota_test:OUT=ROOT/'standalone/results/network-ota-test/sdk'
 OUT.mkdir(parents=True,exist_ok=True)
 html=(ROOT/'standalone/ui/index.html').read_text(encoding='utf-8')
+native_only=options.sfn_native
 html=html.replace('<script src="firmware.js"></script>','').replace('<script src="app.js"></script>','<script src="live.js"></script>')
 # Device boot starts in setup AP; show setup even before API/JS has loaded.
 html=html.replace('aria-selected="true" aria-controls="device"','aria-selected="false" aria-controls="device"')
@@ -49,26 +50,28 @@ assert not any(sample in html for sample in ('192.0.2.10','02:00:00:00:00:01','S
 html=re.sub(r'<!--.*?-->','',html,flags=re.S)
 html=re.sub(r'>\s+<','><',html)
 html=re.sub(r'<style>(.*?)</style>',lambda m:'<style>'+re.sub(r'\s*([{}:;,])\s*',r'\1',m[1])+'</style>',html,flags=re.S)
-sources=[('/', 'text/html; charset=utf-8', html.encode()),
+sources=([('/', 'text/html; charset=utf-8', (ROOT/'standalone/ui/sfn-native-setup.html').read_bytes())] if native_only else [('/', 'text/html; charset=utf-8', html.encode()),
          ('/i18n.js','application/javascript; charset=utf-8',(ROOT/'standalone/ui/i18n.js').read_bytes()),
-         ('/live.js','application/javascript; charset=utf-8',(ROOT/'standalone/ui/live.js').read_bytes())]
+         ('/live.js','application/javascript; charset=utf-8',(ROOT/'standalone/ui/live.js').read_bytes())])
 # Bundle editor with live controller to share gzip dictionary and avoid another
 # request/callback. Preview keeps its separate script for local-file use.
-html=html.replace('<script src="scheduler.js"></script>','')
-sources[0]=('/', 'text/html; charset=utf-8', html.encode())
-sources[-1]=('/live.js','application/javascript; charset=utf-8',(ROOT/'standalone/ui/scheduler.js').read_bytes()+b'\n'+sources[-1][2])
-if options.ota_test:
+if not native_only:
+    html=html.replace('<script src="scheduler.js"></script>','')
+    sources[0]=('/', 'text/html; charset=utf-8', html.encode())
+    sources[-1]=('/live.js','application/javascript; charset=utf-8',(ROOT/'standalone/ui/scheduler.js').read_bytes()+b'\n'+sources[-1][2])
+if options.ota_test and not native_only:
     sources.append(('/ota-live.js','application/javascript; charset=utf-8',(ROOT/'standalone/ui/ota-live.js').read_bytes()))
 # Preview-only translations do not belong in the RAM-resident device image.
 # Retain literal keys in HTML/JS, plus dynamically constructed state keys.
-messages=json.loads(subprocess.check_output(['node','-e',
-    'console.log(JSON.stringify(require(process.argv[1]).messages))',
-    str(ROOT/'standalone/ui/i18n.js')],text=True,encoding='utf-8'))
-used='\n'.join(data.decode('utf-8') for path,kind,data in sources if path!='/i18n.js')
-messages={lang:{key:value for key,value in values.items() if any(quote+key+quote in used for quote in ('"',"'")) or key.startswith('netState')}
-          for lang,values in messages.items()}
-compact='globalThis.MttlI18n={messages:'+json.dumps(messages,ensure_ascii=False,separators=(',',':'))+',text:(language,key,args={})=>{const value=MttlI18n.messages[language==="en"?"en":"ko"][key];if(value===undefined)throw Error("Missing translation: "+key);return value.replace(/\\{(\\w+)\\}/g,(_,name)=>String(args[name]??""));}};'
-sources=[(path,kind,compact.encode() if path=='/i18n.js' else data) for path,kind,data in sources]
+if not native_only:
+    messages=json.loads(subprocess.check_output(['node','-e',
+        'console.log(JSON.stringify(require(process.argv[1]).messages))',
+        str(ROOT/'standalone/ui/i18n.js')],text=True,encoding='utf-8'))
+    used='\n'.join(data.decode('utf-8') for path,kind,data in sources if path!='/i18n.js')
+    messages={lang:{key:value for key,value in values.items() if any(quote+key+quote in used for quote in ('"',"'")) or key.startswith('netState')}
+              for lang,values in messages.items()}
+    compact='globalThis.MttlI18n={messages:'+json.dumps(messages,ensure_ascii=False,separators=(',',':'))+',text:(language,key,args={})=>{const value=MttlI18n.messages[language==="en"?"en":"ko"][key];if(value===undefined)throw Error("Missing translation: "+key);return value.replace(/\\{(\\w+)\\}/g,(_,name)=>String(args[name]??""));}};'
+    sources=[(path,kind,compact.encode() if path=='/i18n.js' else data) for path,kind,data in sources]
 lines=['/* Generated gzip UI assets. Do not edit by hand. */','#include <stddef.h>',
        'typedef struct { const char *path,*type; const unsigned char *data; size_t size; } mttl_asset;']
 meta=[]

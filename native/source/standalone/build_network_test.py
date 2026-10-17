@@ -7,10 +7,11 @@ from standalone.image2_analysis import initialized_body,package_body
 from standalone.ota import inspect_image
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');parser.add_argument('--sensor-test',action='store_true');parser.add_argument('--relay-test',action='store_true');parser.add_argument('--no-watchdog',action='store_true');parser.add_argument('--legacy-relay-timing',action='store_true');parser.add_argument('--sfn-native',action='store_true');parser.add_argument('--sfn-backend-ip',default='');parser.add_argument('--sfn-backend-port',type=int,default=10086);options=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');parser.add_argument('--sensor-test',action='store_true');parser.add_argument('--relay-test',action='store_true');parser.add_argument('--no-watchdog',action='store_true');parser.add_argument('--legacy-relay-timing',action='store_true');parser.add_argument('--sfn-native',action='store_true');parser.add_argument('--sfn-boot-guard',action='store_true');parser.add_argument('--sfn-rescue-fwr',default='');parser.add_argument('--sfn-rescue-sha256',default='');parser.add_argument('--sfn-backend-ip',default='');parser.add_argument('--sfn-backend-port',type=int,default=10086);options=parser.parse_args()
     if (options.no_watchdog or options.legacy_relay_timing) and not options.ota_test:parser.error('comparison flags require ota-test')
     if options.sensor_test and not (options.ota_test or options.sfn_native):parser.error('sensor-test requires ota-test or sfn-native')
     if options.relay_test and not options.sensor_test:parser.error('relay-test requires sensor-test')
+    if options.sfn_boot_guard and (not options.sfn_native or not options.sfn_rescue_fwr or not options.sfn_rescue_sha256):parser.error('sfn-boot-guard requires sfn-native plus rescue FWR and SHA256')
     ota=options.ota_test
     out=ROOT/('standalone/results/network-ota-test' if ota else 'standalone/results/network-test')
     out.mkdir(parents=True,exist_ok=True)
@@ -25,8 +26,11 @@ def main():
         (sdk/'ota_test_config.h').write_text('#define MTTL_OTA_BUILD_ID "'+build_id+'"\n#define MTTL_OTA_BOOT_BYTES '+str(boot_size)+'\n#define MTTL_OTA_BOOT_SHA {'+','.join(map(str,boot_sha))+'}\n',encoding='utf-8')
         with (sdk/'ota_test_config.h').open('a',encoding='utf-8') as config:
             config.write('#define MTTL_DISABLE_WATCHDOG '+str(int(options.no_watchdog))+'\n#define MTTL_LEGACY_RELAY_TIMING '+str(int(options.legacy_relay_timing))+'\n')
-    subprocess.run([sys.executable,str(ROOT/'standalone/build_assets.py'),*(['--ota-test'] if ota else [])],cwd=ROOT,check=True)
-    subprocess.run([sys.executable,str(ROOT/'analysis/build_minimal_network.py'),'--standalone','--network-test',*(['--ota-test'] if ota else []),*(['--sensor-test'] if options.sensor_test else []),*(['--relay-test'] if options.relay_test else []),*(['--sfn-native','--sfn-backend-ip',options.sfn_backend_ip,'--sfn-backend-port',str(options.sfn_backend_port)] if options.sfn_native else [])],cwd=ROOT,check=True)
+    subprocess.run([sys.executable,str(ROOT/'standalone/build_assets.py'),*(['--ota-test'] if ota else []),*(['--sfn-native'] if options.sfn_native else [])],cwd=ROOT,check=True)
+    if options.sfn_boot_guard:
+        guard_sdk=out/'sdk';guard_sdk.mkdir(parents=True,exist_ok=True)
+        subprocess.run([sys.executable,str(ROOT/'standalone/generate_sfn_rescue.py'),'--fwr',options.sfn_rescue_fwr,'--sha256',options.sfn_rescue_sha256,'--out',str(guard_sdk/'sfn_rescue_image.h')],cwd=ROOT,check=True)
+    subprocess.run([sys.executable,str(ROOT/'analysis/build_minimal_network.py'),'--standalone','--network-test',*(['--ota-test'] if ota else []),*(['--sensor-test'] if options.sensor_test else []),*(['--relay-test'] if options.relay_test else []),*(['--sfn-native','--sfn-backend-ip',options.sfn_backend_ip,'--sfn-backend-port',str(options.sfn_backend_port)] if options.sfn_native else []),*(['--sfn-boot-guard'] if options.sfn_boot_guard else [])],cwd=ROOT,check=True)
     sdk=out/'sdk';elf=sdk/'offline-only.axf'
     tool=Path(os.environ['MTTL_GCC_DIR'])/'bin'
     def gcc_tool(name):
@@ -103,6 +107,10 @@ def main():
     report['sfn_native_up_only']=options.sfn_native
     report['sfn_backend_ip']=options.sfn_backend_ip if options.sfn_native else None
     report['sfn_backend_port']=options.sfn_backend_port if options.sfn_native else None
+    report['sfn_boot_guard']=options.sfn_boot_guard
+    report['sfn_boot_guard_timeout_seconds']=900 if options.sfn_boot_guard else None
+    report['sfn_boot_guard_trust_seconds']=60 if options.sfn_boot_guard else None
+    report['sfn_rescue_fwr_sha256']=options.sfn_rescue_sha256.lower() if options.sfn_boot_guard else None
     (out/'manifest.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     if ota:
         import shutil

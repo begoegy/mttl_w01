@@ -24,6 +24,9 @@
 #include "sfn_voltage_guard.h"
 #include "sfn_voltage_policy.h"
 #include "sfn_schedule_sync.h"
+#ifdef SFN_BOOT_GUARD
+#include "sdk_boot_guard.h"
+#endif
 #include "sfn_child_lock.h"
 #include "gpio_api.h"
 #include <stdio.h>
@@ -336,6 +339,9 @@ static void worker(void *p){
     char mac[32];unsigned k,j=0;(void)p;
     mttl_sdk_memory_init();
     mttl_sdk_network_init();
+#ifdef SFN_BOOT_GUARD
+    (void)sfn_sdk_boot_guard_start(clock_ms(0));
+#endif
     mttl_device_init(&device,1767225600ULL);
     sfn_schedule_sync_init(&schedule_sync);
 #ifndef SFN_NATIVE_UP_ONLY
@@ -403,6 +409,9 @@ static void worker(void *p){
         taskEXIT_CRITICAL();
         if(scan_now){int failed=(life.network.state!=MTTL_NET_AP&&life.network.state!=MTTL_NET_ONLINE)||!mttl_sdk_scan_start(++scan_sequence);taskENTER_CRITICAL();scan_failed=failed;taskEXIT_CRITICAL();}
         mttl_lifecycle_step(&life,&services);
+#ifdef SFN_BOOT_GUARD
+        sfn_sdk_boot_guard_tick(clock_ms(0),device.persistent&&device.settings.sfn_backend_ipv4&&device.up.state==SFN_UP_LINK_ONLINE);
+#endif
         /* AP state after stop is enough: saved-network retry must not depend
          * on successful setup AP/HTTP startup. Explicit setup stays manual. */
         if(wifi_retry_ready(clock_ms(0))){

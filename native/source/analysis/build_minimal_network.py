@@ -9,6 +9,7 @@ parser.add_argument('--ota-test',action='store_true',help='Opt-in self-OTA test 
 parser.add_argument('--sensor-test',action='store_true',help='Experimental sensor GPIO profile, requires OTA test')
 parser.add_argument('--relay-test',action='store_true',help='Experimental output profile; requires sensor-test')
 parser.add_argument('--sfn-native',action='store_true',help='Build SFN UP-only profile without standalone MQTT/Home Assistant')
+parser.add_argument('--sfn-boot-guard',action='store_true',help='Include exact-rescue first-boot rollback guard; SFN native only')
 parser.add_argument('--sfn-backend-ip',default='',help='Pinned SFN backend IPv4; required for --sfn-native')
 parser.add_argument('--sfn-backend-port',type=int,default=10086)
 args=parser.parse_args()
@@ -17,6 +18,7 @@ if args.sensor_test and not (args.ota_test or args.sfn_native): parser.error('se
 if args.relay_test and not args.sensor_test: parser.error('relay-test requires sensor-test')
 if args.network_test and not args.standalone: parser.error('network-test requires standalone')
 if args.reserve_bytes < 0: parser.error('reserve-bytes must not be negative')
+if args.sfn_boot_guard and not args.sfn_native: parser.error('--sfn-boot-guard requires --sfn-native')
 if args.sfn_native:
  try: sfn_ip=ipaddress.IPv4Address(args.sfn_backend_ip)
  except ipaddress.AddressValueError: parser.error('--sfn-native requires a valid --sfn-backend-ip')
@@ -56,6 +58,7 @@ if args.relay_test: common += ['-DMTTL_RELAY_TEST=1']
 if args.sfn_native:
  (out/'sfn_native_build_config.h').write_text('#ifndef SFN_NATIVE_BUILD_CONFIG_H\n#define SFN_NATIVE_BUILD_CONFIG_H\n#define SFN_NATIVE_BACKEND_IPV4 0x%08Xu\n#define SFN_NATIVE_BACKEND_PORT %du\n#endif\n' % (int(sfn_ip),args.sfn_backend_port),encoding='ascii')
  common += ['-DSFN_NATIVE_UP_ONLY=1']
+ if args.sfn_boot_guard: common += ['-DSFN_BOOT_GUARD=1']
 sources=[ROOT/'analysis/minimal_network_link.cpp',ROOT/'analysis/bounded_sbrk.c',ROOT/'analysis/http_only_adapter.c',ROOT/'analysis/newlib_scheduler_guard.c',hw/'variants/rtl8710/variant.cpp']
 if args.standalone:
  sources[0]=ROOT/'standalone/firmware/sdk_baseline.cpp'
@@ -86,6 +89,9 @@ if args.standalone:
  sources.append(ROOT/'standalone/firmware/sdk_worker.c')
  for name in ('meter_probe','meter_bus','meter_init','meter_convert','sdk_meter','sdk_energy','sdk_memory','sdk_relay','sdk_sse','sfn_voltage_guard','sfn_voltage_policy','sfn_child_lock','sfn_backend','sfn_schedule_meta','sfn_schedule_sync','sfn_up_protocol','sfn_up_client'):
   sources.append(ROOT/'standalone/firmware'/(name+'.c'))
+ if args.sfn_boot_guard:
+  sources.append(ROOT/'standalone/firmware/sfn_boot_guard_core.c')
+  sources.append(ROOT/'standalone/firmware/sdk_boot_guard.c')
  sources.append(ROOT/'standalone/firmware/wifi_form.c')
  sources.append(ROOT/'standalone/firmware/sdk_http_io.c')
  sources.append(ROOT/'standalone/firmware/sdk_httpd_msg.c')
