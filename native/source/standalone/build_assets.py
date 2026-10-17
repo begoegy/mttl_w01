@@ -22,7 +22,7 @@ html=html.replace('<section id="device" class="active"','<section id="device"')
 html=html.replace('<section id="wifi" role=','<section id="wifi" class="active" role=')
 if options.ota_test:
     panel='''<section id="firmware" role="tabpanel" aria-labelledby="tab-firmware"><div class="panel">
-<h2 data-i18n="firmware">펌웨어</h2><div class="sensor"><span data-i18n="currentVersion">현재 버전</span><b id="current-firmware-version">2.0.13</b></div>
+<h2 data-i18n="firmware">펌웨어</h2><div class="sensor"><span data-i18n="currentVersion">현재 버전</span><b id="current-firmware-version">2.0.14</b></div>
 <div class="sensor"><span>Build ID</span><b id="current-build-id">—</b></div>
 <p id="ota-hint" class="muted"></p><form id="firmware-form">
 <label id="ota-file-label" for="firmware-picker"></label><input id="firmware-file" type="file" accept=".fwr" hidden>

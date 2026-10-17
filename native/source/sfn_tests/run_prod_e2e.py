@@ -6,7 +6,7 @@ sys.path.insert(0,SERVER_SOURCE or PYZ)
 from sfn_power.protocol import mttl_w01 as proto
 from sfn_power.device.hub import DeviceHub
 from sfn_power.service.power_service import PowerService
-MAC='AABBCCDDE201'; FW='2.0.13'
+MAC='AABBCCDDE201'; FW='2.0.14'
 async def wait_for(pred,timeout=6.0,step=.05):
     end=asyncio.get_running_loop().time()+timeout
     while asyncio.get_running_loop().time()<end:
@@ -39,7 +39,7 @@ async def main():
         results['voltage_v']=service.device(MAC)['voltage'];results['rssi']=service.device(MAC)['rssi']
         good=proto.LocalVoltageGuardPolicy(revision=17,enabled=True,low_v=180.0,high_v=250.0,hysteresis_v=10.0,trip_hold_seconds=10.0,recovery_seconds=20,auto_restore=False,protected_mask=5)
         assert await service.configure_voltage_guard(MAC,good);results['vguard_revision']=17;results['vguard_mask']=5
-        # Production protocol can express faster/auto-restore policies; native 2.0.13 must fail closed until physically proven.
+        # Production protocol can express faster/auto-restore policies; native 2.0.14 must fail closed until physically proven.
         fast=proto.LocalVoltageGuardPolicy(revision=18,enabled=True,low_v=180.0,high_v=250.0,hysteresis_v=10.0,trip_hold_seconds=2.0,recovery_seconds=20,auto_restore=False,protected_mask=5)
         assert not await hub.session(MAC).configure_voltage_guard(fast,timeout=.35);results['fast_vguard_rejected']=True
         auto=proto.LocalVoltageGuardPolicy(revision=19,enabled=True,low_v=180.0,high_v=250.0,hysteresis_v=10.0,trip_hold_seconds=10.0,recovery_seconds=20,auto_restore=True,protected_mask=5)

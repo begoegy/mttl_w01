@@ -14,6 +14,9 @@
 #include "sdk_up_socket.h"
 #include "sfn_backend.h"
 #include "sfn_native_build_config.h"
+#include "sfn_vendor_wifi.h"
+#include "flash_api.h"
+#include "device_lock.h"
 #endif
 #include "sdk_settings_flash.h"
 #include "sdk_ntp.h"
@@ -64,9 +67,20 @@ static struct {
 } control_queue[4];
 #ifdef SFN_NATIVE_UP_ONLY
 static sfn_final_state up_final_state;
+static sfn_vendor_wifi_import vendor_wifi_import;
 static uint32_t up_link_epoch=1;
 static uint32_t up_getinfo_epoch;
 static uint8_t up_getinfo_pending;
+extern flash_t flash;
+static int sfn_vendor_wifi_load(void){
+ uint8_t record[SFN_VENDOR_WIFI_RECORD_SIZE];volatile uint8_t *q;size_t n;int ok,count=0;
+ device_mutex_lock(RT_DEV_LOCK_FLASH);
+ ok=flash_stream_read(&flash,SFN_VENDOR_WIFI_RECORD_ADDRESS,sizeof(record),record)==1;
+ device_mutex_unlock(RT_DEV_LOCK_FLASH);
+ if(ok)count=sfn_vendor_wifi_parse(&vendor_wifi_import,record,sizeof(record));
+ q=(volatile uint8_t *)record;n=sizeof(record);while(n--)*q++=0;
+ return count;
+}
 #endif
 static SemaphoreHandle_t relay_wake;
 static mttl_control relay_control;
@@ -388,7 +402,11 @@ static int commit(void *p,const char *s,const char *key){unsigned i;mttl_setting
  changed=sfn_backend_pin(&candidate,SFN_NATIVE_BACKEND_IPV4,SFN_NATIVE_BACKEND_PORT)||changed;
 #endif
  if(changed||!device.persistent){int saved;if(!storage_begin()){wipe((char *)&candidate,sizeof(candidate));return 0;}saved=mttl_sdk_settings_save(&candidate);storage_end();if(saved!=1){wipe((char *)&candidate,sizeof(candidate));return 0;}}
- taskENTER_CRITICAL();device.settings=candidate;device.persistent=1;taskEXIT_CRITICAL();manual_setup=0;wipe((char *)&candidate,sizeof(candidate));
+ taskENTER_CRITICAL();device.settings=candidate;device.persistent=1;taskEXIT_CRITICAL();manual_setup=0;
+#ifdef SFN_NATIVE_UP_ONLY
+ sfn_vendor_wifi_clear(&vendor_wifi_import);
+#endif
+ wipe((char *)&candidate,sizeof(candidate));
  (void)i;return 1;}
 static const mttl_services services={0,stop,ap,join,associated,dhcp,ip,web,clock_ms,commit};
 /* No additional task/socket owner. Service control between independent sensor
@@ -418,7 +436,14 @@ static void worker(void *p){
     sfn_sdk_up_socket_init(&up_socket);sfn_sdk_up_socket_io(&up_socket,&up_io);sfn_final_state_init(&up_final_state);
 #endif
     mttl_sdk_relay_init(&device.hardware);
-    {mttl_settings loaded;int result=mttl_sdk_settings_load(&loaded);if(result>=0){device.settings=loaded;device.persistent=result==1;}wipe((char *)&loaded,sizeof(loaded));}
+    {mttl_settings loaded;int result=mttl_sdk_settings_load(&loaded);
+     if(result>=0){device.settings=loaded;device.persistent=result==1;}
+#ifdef SFN_NATIVE_UP_ONLY
+     /* Import only when our own journal is provably blank. Corrupt/unknown
+      * native settings fail closed instead of falling through to vendor data. */
+     if(result==0)(void)sfn_vendor_wifi_load();
+#endif
+     wipe((char *)&loaded,sizeof(loaded));}
     if(device.hardware.verified){device.control.known_mask=device.settings.relay_known;device.control.on_mask=device.settings.relay_on;}
     /* Restore indicators without pulsing latching relay coils. */
     if(device.hardware.verified&&!mttl_hardware_indicators(&device.hardware,device.control.known_mask,device.control.on_mask))device.hardware.verified=0;
@@ -476,6 +501,15 @@ static void worker(void *p){
         if(scan_requested){scan_now=1;scan_requested=0;}
         taskEXIT_CRITICAL();
         if(scan_now){int failed=(life.network.state!=MTTL_NET_AP&&life.network.state!=MTTL_NET_ONLINE)||!mttl_sdk_scan_start(++scan_sequence);taskENTER_CRITICAL();scan_failed=failed;taskEXIT_CRITICAL();}
+#ifdef SFN_NATIVE_UP_ONLY
+        /* Before starting Setup AP, try each strictly validated vendor profile
+         * once. mttl_wifi_submit copies credentials into lifecycle RAM; only
+         * DHCP success reaches commit(), which writes our separate journal. */
+        if(!device.persistent&&!manual_setup&&life.network.state==MTTL_NET_AP&&sfn_vendor_wifi_pending(&vendor_wifi_import)&&
+           !occupied&&!config_occupied&&!energy_barrier_state&&!scan_requested&&!mttl_sdk_scan_pending()){
+            if(sfn_vendor_wifi_submit_next(&vendor_wifi_import,&life.network,clock_ms(0))){life.join_started=life.dhcp_started=0;ap_ready=0;}
+        }
+#endif
         mttl_lifecycle_step(&life,&services);
 #ifdef SFN_BOOT_GUARD
         sfn_sdk_boot_guard_tick(clock_ms(0),device.persistent&&device.settings.sfn_backend_ipv4&&device.up.state==SFN_UP_LINK_ONLINE);

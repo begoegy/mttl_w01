@@ -114,7 +114,9 @@ if args.standalone:
    sources.append(ROOT/'standalone/firmware'/ (name+'.c'))
  for name in ('hardware_port','device_app'):
   sources.append(ROOT/'standalone/firmware'/ (name+'.c'))
- if args.sfn_native: sources.append(ROOT/'standalone/firmware/sdk_up_socket.c')
+ if args.sfn_native:
+  sources.append(ROOT/'standalone/firmware/sfn_vendor_wifi.c')
+  sources.append(ROOT/'standalone/firmware/sdk_up_socket.c')
 folders=['cores/arduino','libraries/WiFi/src','system/component/common/network/httpd']
 if not args.sfn_native: folders.append('libraries/MQTTClient/src')
 for folder in folders:

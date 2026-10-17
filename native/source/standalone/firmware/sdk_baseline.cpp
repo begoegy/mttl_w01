@@ -4,7 +4,7 @@ extern "C" {
 #include "core.h"
 #include "sdk_worker.h"
 }
-extern "C" const char mttl_firmware_version[] = "2.0.13";
+extern "C" const char mttl_firmware_version[] = "2.0.14";
 /* Native LG U+ OTA checks this 32-byte field at decoded file offset 0x28.
  * Keep it before executable text via the standalone linker script. */
 extern "C" const char mttl_native_ota_hardware[32]

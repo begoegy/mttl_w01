@@ -1,5 +1,7 @@
 # SFN Native 2.0.13 — Existing Server Compatibility QA — 2026-10-17
 
+> **2026-10-17 follow-on:** Native 2.0.14 supersedes the 2.0.13 lab artifact by adding read-only vendor Wi-Fi migration. The unchanged-server relay design below remains valid. See `SFN_NATIVE_VENDOR_WIFI_MIGRATION_QA_2026-10-17.md`.
+
 Status: **LAB PASS / PRODUCTION SERVER UNCHANGED / DO NOT FLASH**
 
 ## Final architecture decision
