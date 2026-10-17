@@ -46,6 +46,8 @@ The rejected 1.0.152 image fails that gate with 273 changed bytes; exact 1.0.150
 
 This is the **leading physically-supported root-cause class**, not a claim that every changed byte in that range has individually been proven causal. No new physical candidate may be built by reclaiming this window.
 
+A three-way physical comparison strengthens this gate: the 36-byte creator region `0x10009A12..0x10009A36` is byte-identical between the proven 1.0.150 baseline and 1.0.151 (which did boot and reconnect), while rejected 1.0.152 changes 34/36 bytes there and never produced BootInfo. This narrows the leading failure class to the creator/startup change rather than the package/envelope or core OTA transfer.
+
 ## Recovery policy
 
 Remote rollback is allowed only if New reconnects. Otherwise recovery is physical and read-first:

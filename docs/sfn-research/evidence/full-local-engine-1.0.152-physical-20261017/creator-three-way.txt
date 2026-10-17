@@ -1,0 +1,7 @@
+Region: 0x10009A12..0x10009A36 (36 bytes)
+1.0.150 stable SHA region: 37564169c95a7866... ; diff vs 1.0.150 = 0
+1.0.151 physical-booted/reconnect-loop region: 37564169c95a7866... ; diff vs 1.0.150 = 0
+1.0.152 physical-no-BootInfo region: 35442332497fc3f8... ; diff vs 1.0.150 = 34/36
+1.0.151 creator == 1.0.150 creator: TRUE
+1.0.152 creator == 1.0.150 creator: FALSE
+Interpretation: preserving the vendor creator distinguishes the physical booting 1.0.151 from the no-BootInfo 1.0.152. This supports, but does not alone mathematically prove, the task-creator root-cause class.
