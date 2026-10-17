@@ -11,7 +11,7 @@ parser.add_argument('--relay-test',action='store_true',help='Experimental output
 parser.add_argument('--sfn-native',action='store_true',help='Build SFN UP-only profile without standalone MQTT/Home Assistant')
 args=parser.parse_args()
 if args.ota_test and not args.network_test: parser.error('ota-test requires network-test')
-if args.sensor_test and not args.ota_test: parser.error('sensor-test requires ota-test')
+if args.sensor_test and not (args.ota_test or args.sfn_native): parser.error('sensor-test requires ota-test or sfn-native')
 if args.relay_test and not args.sensor_test: parser.error('relay-test requires sensor-test')
 if args.network_test and not args.standalone: parser.error('network-test requires standalone')
 if args.reserve_bytes < 0: parser.error('reserve-bytes must not be negative')
@@ -52,6 +52,9 @@ if args.standalone:
  if args.ota_test:
   sources[-1]=ROOT/'standalone/firmware/sdk_test_heap.c'
   sources.append(ROOT/'standalone/firmware/sdk_ota_runtime.c')
+ elif args.sfn_native:
+  sources[-1]=ROOT/'standalone/firmware/sdk_heap_profile.c'
+  sources.append(ROOT/'standalone/firmware/sdk_flash_runtime.c')
  sources.append(ROOT/'standalone/firmware/core.c')
  sources.append(ROOT/'standalone/firmware/ota_guard.c')
  sources.append(ROOT/'standalone/firmware/ota_stream.c')
@@ -94,6 +97,7 @@ if args.standalone:
    sources.append(ROOT/'standalone/firmware'/ (name+'.c'))
  for name in ('hardware_port','device_app'):
   sources.append(ROOT/'standalone/firmware'/ (name+'.c'))
+ if args.sfn_native: sources.append(ROOT/'standalone/firmware/sdk_up_socket.c')
 folders=['cores/arduino','libraries/WiFi/src','system/component/common/network/httpd']
 if not args.sfn_native: folders.append('libraries/MQTTClient/src')
 for folder in folders:

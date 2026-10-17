@@ -10,6 +10,8 @@
 #include "device_app.h"
 #ifndef SFN_NATIVE_UP_ONLY
 #include "sdk_mqtt_socket.h"
+#else
+#include "sdk_up_socket.h"
 #endif
 #include "sdk_settings_flash.h"
 #include "sdk_ntp.h"
@@ -130,6 +132,9 @@ static mttl_sdk_mqtt_socket mqtt_socket;
 static mttl_mqtt_io mqtt_io;
 #define SFN_MQTT_IO (&mqtt_io)
 #else
+static sfn_sdk_up_socket up_socket;
+static sfn_up_io up_io;
+static uint8_t up_physical_pending;
 #define SFN_MQTT_IO ((const mttl_mqtt_io *)0)
 #endif
 static char device_json[1536],identity[13];
@@ -142,6 +147,39 @@ static mttl_worker_status published;
 static uint32_t rssi_polled_at;
 static int cached_rssi;
 static uint8_t cached_rssi_valid;
+static uint32_t clock_ms(void *context);
+static int control_enqueue(unsigned channel,unsigned on,int local);
+#ifdef SFN_NATIVE_UP_ONLY
+extern const char mttl_firmware_version[];
+static void sfn_backend_text(uint32_t ip,char out[16]){snprintf(out,16,"%lu.%lu.%lu.%lu",(unsigned long)(ip>>24),(unsigned long)((ip>>16)&255u),(unsigned long)((ip>>8)&255u),(unsigned long)(ip&255u));}
+static size_t sfn_up_handle(void *context,const sfn_up_command *command,char *out,size_t cap){
+ mttl_device_app *d=context;uint32_t now=clock_ms(0);unsigned i;int32_t value;uint8_t known,on;
+ if(!d||!command||!out)return 0;
+ switch(command->type){
+  case SFN_UP_CMD_GETINFO_ALL:{sfn_up_outlet x[4];taskENTER_CRITICAL();known=relay_known;on=relay_on;taskEXIT_CRITICAL();
+   for(i=0;i<4;i++){int32_t power=0,temp=0,energy=(int32_t)d->settings.energy_wh[i];
+    (void)mttl_sample_read(&d->samples.power[i],now,MTTL_SENSOR_MAX_AGE_MS,&power);
+    if(mttl_sample_read(&d->samples.temperature[i],now,MTTL_SENSOR_MAX_AGE_MS,&temp))temp/=10;else temp=0;
+    (void)mttl_sample_read(&d->samples.meter[i],now,MTTL_SENSOR_MAX_AGE_MS,&energy);
+    x[i].channel=(uint8_t)(i+1);x[i].on=(known&(1u<<i))&&((on&(1u<<i))!=0);x[i].runtime=(int32_t)(now/1000u);x[i].state=(known&(1u<<i))?1:0;x[i].power_mw=power;x[i].energy_wh=energy<0?0:(uint32_t)energy;x[i].temperature_c=temp;x[i].overload="0";x[i].overheat="0";}
+   return sfn_up_encode_getinfo(out,cap,x);}
+  case SFN_UP_CMD_ONOFF:
+   if(control_enqueue(command->channel-1,command->on,0))return sfn_up_encode_onoff_ack(out,cap,command->channel,command->on);return 0;
+  case SFN_UP_CMD_VOLTAGE:
+   if(mttl_sample_read(&d->samples.voltage,now,MTTL_SENSOR_MAX_AGE_MS,&value)&&value>=0)return sfn_up_encode_voltage(out,cap,1,value*100);return 0;
+  case SFN_UP_CMD_RSSI:
+   if(cached_rssi_valid)return sfn_up_encode_rssi(out,cap,cached_rssi);return 0;
+  case SFN_UP_CMD_CHILDLOCK_GET:return sfn_up_encode_childlock(out,cap,d->settings.child_lock_mask);
+  case SFN_UP_CMD_CHILDLOCK_SET:{unsigned old=d->settings.child_lock_mask;if(command->mask!=old&&!config_occupied&&!occupied&&!energy_barrier_state){mttl_settings candidate=d->settings;
+    candidate.child_lock_mask=command->mask;if(storage_begin()){int saved=mttl_sdk_settings_save(&candidate);storage_end();if(saved==1){taskENTER_CRITICAL();d->settings=candidate;++d->revision;taskEXIT_CRITICAL();old=command->mask;}}}
+   return sfn_up_encode_childlock(out,cap,old);}
+  default:return 0;
+ }
+}
+static void sfn_up_disconnect(void){if(device.up.state!=SFN_UP_LINK_OFF)sfn_up_client_reset(&device.up,&up_io);}
+static void sfn_up_service(int online){char host[16];uint32_t ip=device.settings.sfn_backend_ipv4;if(!online||!ip||!identity[0]){sfn_up_disconnect();return;}sfn_backend_text(ip,host);(void)sfn_up_client_step(&device.up,&up_io,1,host,device.settings.sfn_backend_port,clock_ms(0),"lgutap",identity,mttl_firmware_version,sfn_up_handle,&device);}
+static void sfn_up_physical_events(void){unsigned i;char frame[48];size_t n;if(relay_busy||control_pending||!up_physical_pending)return;for(i=0;i<5;i++)if(up_physical_pending&(1u<<i)){int state=i?((relay_on&(1u<<(i-1)))!=0):(relay_on==15);n=sfn_up_encode_event(frame,sizeof(frame),i,state);if(n&&sfn_up_client_publish(&device.up,frame,n))up_physical_pending=(uint8_t)(up_physical_pending&~(1u<<i));break;}}
+#endif
 static int control_enqueue(unsigned channel,unsigned on,int local){int ok=0;if(channel>4||on>1)return 0;taskENTER_CRITICAL();if(worker_started&&relay_wake&&(local||published.state==MTTL_NET_ONLINE)&&!energy_barrier_state&&!occupied&&!config_occupied&&control_pending<4&&device.hardware.verified&&!relay_fault&&!(on&&voltage_guard_state.fault)){unsigned tail=(control_head+control_pending)&3;control_queue[tail].channel=channel;control_queue[tail].on=on;control_queue[tail].at=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS;++control_pending;
 /* Publish the new progress timestamp atomically with busy, before waking
  * the relay task or allowing watchdog evaluation of this command. */
@@ -155,7 +193,11 @@ void mttl_sdk_button_event(unsigned index,int event){unsigned on,lock_mask;if(in
  if(!sfn_child_lock_event_allowed(lock_mask,index,(unsigned)event))return;
  if(index==0&&event==2){taskENTER_CRITICAL();if(!energy_barrier_state){provision_requested=1;setup_led_edges=6;setup_led_at=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS-200u;}taskEXIT_CRITICAL();return;}
  taskENTER_CRITICAL();on=index?!(relay_desired&(1u<<(index-1))):!relay_desired;taskEXIT_CRITICAL();
- (void)control_enqueue(index?index-1:4,on,1);
+ if(control_enqueue(index?index-1:4,on,1)){
+#ifdef SFN_NATIVE_UP_ONLY
+  taskENTER_CRITICAL();up_physical_pending=(uint8_t)(up_physical_pending|(1u<<index));taskEXIT_CRITICAL();
+#endif
+ }
 }
 /* Called from the existing Arduino loop, independently of network/flash work. */
 void mttl_sdk_buttons_poll(void){unsigned i;uint32_t now;if(!buttons_ready)return;now=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS;
@@ -205,6 +247,9 @@ int mttl_sdk_wifi_reserve(const char *ssid,const char *password){
 void mttl_sdk_wifi_release(int accepted){taskENTER_CRITICAL();if(occupied){if(accepted)ready=1;else{wipe(requested_ssid,33);wipe(requested_password,65);occupied=0;}}taskEXIT_CRITICAL();}
 static int stop(void *p){
     (void)p;taskENTER_CRITICAL();ap_ready=0;taskEXIT_CRITICAL();
+#ifdef SFN_NATIVE_UP_ONLY
+    sfn_up_disconnect();
+#endif
     if(mttl_sdk_scan_pending())return 0;
     mttl_device_tick(&device,identity,0,clock_ms(0),SFN_MQTT_IO);
 #ifndef SFN_NATIVE_UP_ONLY
@@ -244,6 +289,9 @@ static void meter_network_service(void){
  taskENTER_CRITICAL();device.control.known_mask=relay_known;device.control.on_mask=relay_on;device.control.fault=relay_fault;taskEXIT_CRITICAL();
  mttl_device_tick(&device,identity,1,clock_ms(0),SFN_MQTT_IO);
  mttl_device_tick(&device,identity,1,clock_ms(0),SFN_MQTT_IO);
+#ifdef SFN_NATIVE_UP_ONLY
+ sfn_up_service(1);sfn_up_service(1);sfn_up_physical_events();
+#endif
  publish_snapshots(clock_ms(0));
 }
 static void worker(void *p){
@@ -253,6 +301,8 @@ static void worker(void *p){
     mttl_device_init(&device,1767225600ULL);
 #ifndef SFN_NATIVE_UP_ONLY
     mttl_sdk_mqtt_socket_init(&mqtt_socket);mttl_sdk_mqtt_socket_io(&mqtt_socket,&mqtt_io);
+#else
+    sfn_sdk_up_socket_init(&up_socket);sfn_sdk_up_socket_io(&up_socket,&up_io);
 #endif
     mttl_sdk_relay_init(&device.hardware);
     {mttl_settings loaded;int result=mttl_sdk_settings_load(&loaded);if(result>=0){device.settings=loaded;device.persistent=result==1;}wipe((char *)&loaded,sizeof(loaded));}
@@ -323,6 +373,9 @@ static void worker(void *p){
         /* Radio initialization may be required before the SDK can read its MAC. */
         if(!identity[0]&&(life.network.state==MTTL_NET_AP||life.network.state==MTTL_NET_ONLINE)){memset(mac,0,sizeof(mac));j=0;if(wifi_get_mac_address(mac)==RTW_SUCCESS){for(k=0;mac[k]&&j<12;k++){char c=mac[k];if(c>='A'&&c<='F')c=(char)(c+32);if((c>='0'&&c<='9')||(c>='a'&&c<='f'))identity[j++]=c;}if(j!=12)identity[0]=0;}}
         mttl_device_tick(&device,identity,life.network.state==MTTL_NET_ONLINE,clock_ms(0),SFN_MQTT_IO);
+#ifdef SFN_NATIVE_UP_ONLY
+        sfn_up_service(life.network.state==MTTL_NET_ONLINE);sfn_up_physical_events();
+#endif
         /* Pulse adapter has already released coils; save only a completed queue. */
         if(!device.control.fault&&!mttl_sdk_energy_relay_saved(device.control.known_mask,device.control.on_mask)&&relay_save_ready(clock_ms(0))&&(!relay_save_retry||(uint32_t)(clock_ms(0)-relay_save_attempt_at)>=5000u)&&storage_begin()){
             device.settings.relay_known=device.control.known_mask;device.settings.relay_on=device.control.on_mask;

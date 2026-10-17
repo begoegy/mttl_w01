@@ -19,6 +19,8 @@ typedef struct {
     mttl_schedule_config schedule;
     sfn_voltage_guard_config voltage_guard;
     uint8_t child_lock_mask;
+    uint32_t sfn_backend_ipv4;
+    uint16_t sfn_backend_port;
 } mttl_settings;
 /* Versioned length-prefixed encoding, never raw C structure/padding. */
 #define MTTL_SETTINGS_BODY_MAX 1024

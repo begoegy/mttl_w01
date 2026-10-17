@@ -9,7 +9,7 @@ from standalone.ota import inspect_image
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');parser.add_argument('--sensor-test',action='store_true');parser.add_argument('--relay-test',action='store_true');parser.add_argument('--no-watchdog',action='store_true');parser.add_argument('--legacy-relay-timing',action='store_true');parser.add_argument('--sfn-native',action='store_true');options=parser.parse_args()
     if (options.no_watchdog or options.legacy_relay_timing) and not options.ota_test:parser.error('comparison flags require ota-test')
-    if options.sensor_test and not options.ota_test:parser.error('sensor-test requires ota-test')
+    if options.sensor_test and not (options.ota_test or options.sfn_native):parser.error('sensor-test requires ota-test or sfn-native')
     if options.relay_test and not options.sensor_test:parser.error('relay-test requires sensor-test')
     ota=options.ota_test
     out=ROOT/('standalone/results/network-ota-test' if ota else 'standalone/results/network-test')
@@ -91,9 +91,9 @@ def main():
             'link_warning_count':sum(': warning:' in line for line in (sdk/'build.log').read_text().splitlines()),
             'boot_signature':'FFFFFFFFFFFFFFFF','device_written':False,
             'target_boot_verified':False,'validation_profile':'Portable format/roundtrip and setup emulator; original decoder fixture not included','production_ready':False,
-            'relay_enabled':options.relay_test,'settings_persistent':False,'ota_write_enabled':ota,
+            'relay_enabled':options.relay_test,'settings_persistent':True,'ota_write_enabled':ota,
             'settings_flash_enabled':True,'settings_sectors':['0xee000','0xef000'],
-            'initial_rtos_heap_bytes':(39 if options.sensor_test else 48)*1024 if ota else 100*1024,
+            'initial_rtos_heap_bytes':((39 if options.sensor_test else 48)*1024 if (ota or options.sfn_native) else 100*1024),
             'sensor_gpio_enabled':options.sensor_test,
             'ota_runtime_validated':False,
             'warning':'Experimental bring-up candidate, not target-boot validated. Recovery debugger required. No direct full-flash writing; no bootloader/factory replacement.'}
