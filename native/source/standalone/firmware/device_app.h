@@ -4,23 +4,39 @@
 #include "hardware_port.h"
 #include "mqtt_engine.h"
 #include "ntp_client.h"
+#ifdef SFN_NATIVE_UP_ONLY
+#include "sfn_up_client.h"
+#endif
 typedef struct {
     mttl_settings settings;
     mttl_control control;mttl_hardware_port hardware;mttl_hardware_samples samples;
-    mttl_mqtt_engine mqtt;mttl_ntp_client ntp;mttl_button main_button,channel_button[4];
+#ifdef SFN_NATIVE_UP_ONLY
+    sfn_up_client up;
+#else
+    mttl_mqtt_engine mqtt;
+#endif
+    mttl_ntp_client ntp;mttl_button main_button,channel_button[4];
     uint32_t revision;uint8_t persistent,provision_requested;
+#ifndef SFN_NATIVE_UP_ONLY
     uint32_t publish_at;uint8_t publish_index;
+#endif
     int (*relay_request)(unsigned,unsigned); /* Optional external relay owner. */
+#ifndef SFN_NATIVE_UP_ONLY
     uint8_t mqtt_known,mqtt_on,mqtt_all,mqtt_was_online;
+#endif
     mttl_protection_state protection;
 } mttl_device_app;
 /* Queued state is not yet transmitted. Keep the socket owner ahead of
  * slow meter/NOR work until channel and aggregate confirmations drain. */
 static inline int mttl_device_mqtt_pending(const mttl_device_app *d){
+#ifdef SFN_NATIVE_UP_ONLY
+    (void)d;return 0;
+#else
     return d->mqtt.tx_size ||
         (d->control.known_mask&~d->mqtt_known) ||
         ((d->control.on_mask^d->mqtt_on)&d->control.known_mask) ||
         (d->control.known_mask==15&&(!d->mqtt_all||d->mqtt_was_online!=(d->control.on_mask==15)));
+#endif
 }
 void mttl_device_init(mttl_device_app *,uint64_t reference_time);
 /* Flash workspace supplied only by a future serialized persistence owner. */

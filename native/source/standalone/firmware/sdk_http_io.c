@@ -1,7 +1,7 @@
 /* Keep vendor utility code intact; replace only socket I/O entry points. */
 #define httpd_read mttl_vendor_httpd_read
 #define httpd_write mttl_vendor_httpd_write
-#include "../../work/reference/ameba-arduino-1/Arduino_package/hardware/system/component/common/network/httpd/httpd_util.c"
+#include "component/common/network/httpd/httpd_util.c"
 #undef httpd_read
 #undef httpd_write
 #include "deadline.h"

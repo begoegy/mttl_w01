@@ -1,9 +1,19 @@
 #include "device_app.h"
 #include <stdio.h>
 #include <string.h>
+#ifndef SFN_NATIVE_UP_ONLY
 static void publish_sample(mttl_device_app *,const char *,uint32_t);
+#endif
 static int quote(const char *s,char *out,size_t cap){size_t j=0;unsigned char c;if(cap<3)return 0;out[j++]='"';while(*s){c=(unsigned char)*s++;if(c<32)return 0;if(c=='"'||c=='\\'){if(j+2>=cap)return 0;out[j++]='\\';}if(j+2>=cap)return 0;out[j++]=(char)c;}out[j++]='"';out[j]=0;return 1;}
-void mttl_device_init(mttl_device_app *d,uint64_t reference){memset(d,0,sizeof(*d));mttl_settings_default(&d->settings);mttl_control_init(&d->control,100);mttl_hardware_init(&d->hardware);mttl_mqtt_engine_init(&d->mqtt);mttl_ntp_client_init(&d->ntp,reference);}
+void mttl_device_init(mttl_device_app *d,uint64_t reference){
+    memset(d,0,sizeof(*d));mttl_settings_default(&d->settings);mttl_control_init(&d->control,100);mttl_hardware_init(&d->hardware);
+#ifdef SFN_NATIVE_UP_ONLY
+    sfn_up_client_init(&d->up);
+#else
+    mttl_mqtt_engine_init(&d->mqtt);
+#endif
+    mttl_ntp_client_init(&d->ntp,reference);
+}
 int mttl_device_load(mttl_device_app *d,const mttl_settings_io *io,mttl_config_workspace *workspace){int result;if(!workspace)return -1;result=mttl_config_load(io,workspace,&d->settings);if(result>=0){d->persistent=1;++d->revision;}return result;}
 int mttl_device_configure(mttl_device_app *d,const uint8_t *body,size_t size,const mttl_settings_io *io,mttl_config_workspace *workspace){
     mttl_settings candidate;int result=0;volatile uint8_t *p=(volatile uint8_t *)&candidate;size_t i;
@@ -22,11 +32,16 @@ void mttl_device_tick(mttl_device_app *d,const char *id,int network,uint32_t now
     mttl_output output={&d->hardware,mttl_hardware_begin,mttl_hardware_end};
     if(!d->relay_request&&d->hardware.verified&&d->hardware.write)mttl_control_tick(&d->control,&output,now);
     mttl_ntp_link(&d->ntp,network,now);
+#ifndef SFN_NATIVE_UP_ONLY
     if(io){mttl_mqtt_io bound=*io;bound.command=mttl_device_command;bound.command_context=d;mttl_mqtt_engine_step(&d->mqtt,&d->settings,id,network,d->revision,now,&bound);}
     if(d->mqtt.session.state!=MTTL_MQ_ONLINE||d->mqtt.rediscover){d->mqtt_known=d->mqtt_all=d->mqtt_was_online=0;}
     else{unsigned dirty=(d->control.known_mask&~d->mqtt_known)|((d->control.on_mask^d->mqtt_on)&d->control.known_mask);
       if(dirty||!d->mqtt_all||(uint32_t)(now-d->publish_at)>=200){publish_sample(d,id,now);d->publish_at=now;}}
+#else
+    (void)id;(void)io;
+#endif
 }
+#ifndef SFN_NATIVE_UP_ONLY
 static void publish_sample(mttl_device_app *d,const char *id,uint32_t now){
     static const char *keys[]={"power","meter","voltage","current"};
     const mttl_sample *value=0;char base[96],topic[128],key[24],payload[24];unsigned index=d->publish_index,metric,ch;int32_t raw;unsigned scale=1000;uint32_t magnitude;
@@ -50,12 +65,18 @@ static void publish_sample(mttl_device_app *d,const char *id,uint32_t now){
     }
     snprintf(topic,sizeof(topic),"%s/%s",base,key);if(mttl_mqtt_engine_publish(&d->mqtt,topic,(const uint8_t *)payload,strlen(payload),index<5,now)&&index<5){if(!index){d->mqtt_all=1;d->mqtt_was_online=d->control.on_mask==15;}else{unsigned bit=1u<<(index-1);d->mqtt_known|=bit;d->mqtt_on=(d->mqtt_on&~bit)|(d->control.on_mask&bit);}}
 }
+#endif
 static void sample(const mttl_sample *s,uint32_t now,char out[16]){int32_t value;if(mttl_sample_read(s,now,MTTL_SENSOR_MAX_AGE_MS,&value))snprintf(out,16,"%ld",(long)value);else strcpy(out,"null");}
 size_t mttl_device_status(const mttl_device_app *d,uint32_t now,char *out,size_t cap){
-    char name[132],voltage[16],power[16],meter[16],current[16],temp[16],on[8];size_t used;unsigned i;int n;
+    char name[132],voltage[16],power[16],meter[16],current[16],temp[16],on[8];size_t used;unsigned i,transport_state;int n;
+#ifdef SFN_NATIVE_UP_ONLY
+    transport_state=(unsigned)d->up.state;
+#else
+    transport_state=(unsigned)d->mqtt.session.state;
+#endif
     if(!quote(d->settings.device,name,sizeof(name)))return 0;sample(&d->samples.voltage,now,voltage);
     sample(&d->samples.total_power,now,power);sample(&d->samples.total_meter,now,meter);sample(&d->samples.total_current,now,current);
-    n=snprintf(out,cap,"{\"name\":%s,\"language\":%u,\"revision\":%lu,\"persistent\":%s,\"hardware_ready\":%s,\"voltage_dv\":%s,\"power_mw\":%s,\"meter_wh\":%s,\"current_ma\":%s,\"mqtt_state\":%u,\"channels\":[",name,d->settings.language,(unsigned long)d->revision,d->persistent?"true":"false",d->hardware.verified&&d->hardware.write?"true":"false",voltage,power,meter,current,(unsigned)d->mqtt.session.state);
+    n=snprintf(out,cap,"{\"name\":%s,\"language\":%u,\"revision\":%lu,\"persistent\":%s,\"hardware_ready\":%s,\"voltage_dv\":%s,\"power_mw\":%s,\"meter_wh\":%s,\"current_ma\":%s,\"mqtt_state\":%u,\"channels\":[",name,d->settings.language,(unsigned long)d->revision,d->persistent?"true":"false",d->hardware.verified&&d->hardware.write?"true":"false",voltage,power,meter,current,transport_state);
     if(n<0||(size_t)n>=cap)return 0;used=(size_t)n;
     for(i=0;i<4;i++){if(!quote(d->settings.channel[i],name,sizeof(name)))return 0;sample(&d->samples.power[i],now,power);sample(&d->samples.meter[i],now,meter);sample(&d->samples.current[i],now,current);sample(&d->samples.temperature[i],now,temp);
         strcpy(on,(d->control.known_mask&(1u<<i))?((d->control.on_mask&(1u<<i))?"true":"false"):"null");

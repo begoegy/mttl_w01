@@ -7,7 +7,7 @@ from standalone.image2_analysis import initialized_body,package_body
 from standalone.ota import inspect_image
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');parser.add_argument('--sensor-test',action='store_true');parser.add_argument('--relay-test',action='store_true');parser.add_argument('--no-watchdog',action='store_true');parser.add_argument('--legacy-relay-timing',action='store_true');options=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');parser.add_argument('--sensor-test',action='store_true');parser.add_argument('--relay-test',action='store_true');parser.add_argument('--no-watchdog',action='store_true');parser.add_argument('--legacy-relay-timing',action='store_true');parser.add_argument('--sfn-native',action='store_true');options=parser.parse_args()
     if (options.no_watchdog or options.legacy_relay_timing) and not options.ota_test:parser.error('comparison flags require ota-test')
     if options.sensor_test and not options.ota_test:parser.error('sensor-test requires ota-test')
     if options.relay_test and not options.sensor_test:parser.error('relay-test requires sensor-test')
@@ -26,10 +26,16 @@ def main():
         with (sdk/'ota_test_config.h').open('a',encoding='utf-8') as config:
             config.write('#define MTTL_DISABLE_WATCHDOG '+str(int(options.no_watchdog))+'\n#define MTTL_LEGACY_RELAY_TIMING '+str(int(options.legacy_relay_timing))+'\n')
     subprocess.run([sys.executable,str(ROOT/'standalone/build_assets.py'),*(['--ota-test'] if ota else [])],cwd=ROOT,check=True)
-    subprocess.run([sys.executable,str(ROOT/'analysis/build_minimal_network.py'),'--standalone','--network-test',*(['--ota-test'] if ota else []),*(['--sensor-test'] if options.sensor_test else []),*(['--relay-test'] if options.relay_test else [])],cwd=ROOT,check=True)
+    subprocess.run([sys.executable,str(ROOT/'analysis/build_minimal_network.py'),'--standalone','--network-test',*(['--ota-test'] if ota else []),*(['--sensor-test'] if options.sensor_test else []),*(['--relay-test'] if options.relay_test else []),*(['--sfn-native'] if options.sfn_native else [])],cwd=ROOT,check=True)
     sdk=out/'sdk';elf=sdk/'offline-only.axf'
     tool=Path(os.environ['MTTL_GCC_DIR'])/'bin'
-    def run(name,*args):return subprocess.check_output([str(tool/(name+'.exe')),*map(str,args)],text=True)
+    def gcc_tool(name):
+        p=tool/name
+        if p.is_file():return p
+        q=tool/(name+'.exe')
+        if q.is_file():return q
+        raise FileNotFoundError(name)
+    def run(name,*args):return subprocess.check_output([str(gcc_tool(name)),*map(str,args)],text=True)
     syms={p[2]:int(p[0],16) for line in run('arm-none-eabi-nm',elf).splitlines() if len(p:=line.split())==3}
     assert syms['__HeapLimit']<=syms['__mttl_msp_limit']
     assert syms['__mttl_msp_top']-syms['__mttl_msp_limit']==4096
@@ -43,7 +49,7 @@ def main():
     assert re.search(r'\bbl\b[^\n]*<mttl_sdk_worker_start>',setup)
     (out/'setup-disassembly.txt').write_text(setup,encoding='utf-8')
     # Execute the real setup on ARM; replace only worker startup (no SDK/RTOS).
-    sys.path.insert(0,str(ROOT/'.tools/pydeps'))
+    sys.path.insert(0,os.environ.get('MTTL_PYDEPS_ROOT',str(ROOT/'.tools/pydeps')))
     from unicorn import Uc,UC_ARCH_ARM,UC_MODE_THUMB,UC_HOOK_CODE
     from unicorn.arm_const import UC_ARM_REG_SP,UC_ARM_REG_LR,UC_ARM_REG_PC,UC_ARM_REG_R0
     import struct
@@ -64,7 +70,7 @@ def main():
     objcopy=out/'independent-body.bin'
     args=['-O','binary']
     for s in sections:args+=['-j',s['section']]
-    subprocess.run([str(tool/'arm-none-eabi-objcopy.exe'),*args,str(elf),str(objcopy)],check=True)
+    subprocess.run([str(gcc_tool('arm-none-eabi-objcopy')),*args,str(elf),str(objcopy)],check=True)
     assert objcopy.read_bytes()==body
     raw,fwr=package_body(body)
     assert raw[0x28:0x48]==b'LGU+-TAP-HW002'.ljust(32,b'\0')
@@ -94,6 +100,7 @@ def main():
     report['build_id']=build_id if ota else None
     report['watchdog_enabled']=not options.no_watchdog
     report['legacy_relay_timing']=options.legacy_relay_timing
+    report['sfn_native_up_only']=options.sfn_native
     (out/'manifest.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     if ota:
         import shutil

@@ -97,3 +97,28 @@ Added a bounded, allocation-free UP client engine:
 - `up:ota` remains unsupported/rejected by design.
 
 Verification: `SFN_UP_CLIENT_TESTS=PASS` with host GCC `-Wall -Wextra -Werror -pedantic`, including partial I/O, reconnect/backoff, malformed/unknown command behavior, overflow recovery and physical-event publish.
+
+## Phase 3A — pinned Linux ARM build + SFN UP-only memory profile
+Status: **ARM LINK PASS / LAB ARTIFACT ONLY / NO DEVICE WRITE**.
+
+The upstream standalone 2.0.12 baseline was first built with the same pinned Linux GCC 4.8.3 + exact Ameba SDK. It passed link and packaging but left only 16 bytes between `__HeapLimit` and the preserved 4 KiB MSP reservation. Adding SFN features without removing unused standalone functionality correctly failed the MSP linker gate by 1216 bytes; the MSP reservation and RTOS heap were not reduced.
+
+Root fix: `SFN_NATIVE_UP_ONLY` removes standalone MQTT/Home Assistant code/state that SFN Power does not use and keeps Wi-Fi, relay, meter, NTP, scheduler, persistent settings and OTA laboratory machinery. This replaces, rather than stacks on top of, the standalone transport feature set.
+
+Measured SFN native profile:
+- ARM link: PASS
+- `.ram_image2.text`: 314088 bytes (upstream baseline 320800)
+- `.ram.data`: 6904 bytes
+- `.ram.bss`: 61772 bytes (upstream baseline 62112)
+- `.bf_data`: 40216 bytes
+- MSP reserve: unchanged 4096 bytes
+- RTOS heap: unchanged 39936 bytes
+- static gap before MSP: **7068 bytes** (upstream baseline 16 bytes)
+- setup ARM mock: 2/2 PASS
+- BIN/FWR roundtrip: PASS
+- native OTA hardware field: PASS
+- generated laboratory FWR bytes: 321044
+- device_written: false
+- target_boot_verified: false
+
+The generated laboratory FWR is not a release candidate and must not be offered, catalogued or flashed. A real SFN UP socket adapter and compatible provisioning/recovery path are still mandatory gates.

@@ -8,7 +8,9 @@
 #include "semphr.h"
 #include "wifi_conf.h"
 #include "device_app.h"
+#ifndef SFN_NATIVE_UP_ONLY
 #include "sdk_mqtt_socket.h"
+#endif
 #include "sdk_settings_flash.h"
 #include "sdk_ntp.h"
 #include "sdk_meter.h"
@@ -123,8 +125,13 @@ int mttl_sdk_energy_barrier(void){unsigned i;int result=0;
  if(!result)mttl_sdk_energy_release();return result;
 }
 void mttl_sdk_energy_release(void){taskENTER_CRITICAL();energy_barrier_state=0;taskEXIT_CRITICAL();}
+#ifndef SFN_NATIVE_UP_ONLY
 static mttl_sdk_mqtt_socket mqtt_socket;
 static mttl_mqtt_io mqtt_io;
+#define SFN_MQTT_IO (&mqtt_io)
+#else
+#define SFN_MQTT_IO ((const mttl_mqtt_io *)0)
+#endif
 static char device_json[1536],identity[13];
 static size_t device_size;
 static mttl_settings pending_config;
@@ -199,8 +206,10 @@ void mttl_sdk_wifi_release(int accepted){taskENTER_CRITICAL();if(occupied){if(ac
 static int stop(void *p){
     (void)p;taskENTER_CRITICAL();ap_ready=0;taskEXIT_CRITICAL();
     if(mttl_sdk_scan_pending())return 0;
-    mttl_device_tick(&device,identity,0,clock_ms(0),&mqtt_io);
+    mttl_device_tick(&device,identity,0,clock_ms(0),SFN_MQTT_IO);
+#ifndef SFN_NATIVE_UP_ONLY
     if(device.mqtt.session.state!=MTTL_MQ_OFF)return 0;
+#endif
     mttl_sdk_web_stop();if(!mttl_sdk_web_stopped())return 0;
     if(stop_phase==0){if(mttl_sdk_dhcp_busy()||!mttl_sdk_dhcp_stop())return 0;stop_phase=1;return 0;}
     if(mttl_sdk_dhcp_busy())return 0;
@@ -233,15 +242,18 @@ static const mttl_services services={0,stop,ap,join,associated,dhcp,ip,web,clock
 static void meter_network_service(void){
  if(energy_barrier_state||life.network.state!=MTTL_NET_ONLINE)return;
  taskENTER_CRITICAL();device.control.known_mask=relay_known;device.control.on_mask=relay_on;device.control.fault=relay_fault;taskEXIT_CRITICAL();
- mttl_device_tick(&device,identity,1,clock_ms(0),&mqtt_io);
- mttl_device_tick(&device,identity,1,clock_ms(0),&mqtt_io);
+ mttl_device_tick(&device,identity,1,clock_ms(0),SFN_MQTT_IO);
+ mttl_device_tick(&device,identity,1,clock_ms(0),SFN_MQTT_IO);
  publish_snapshots(clock_ms(0));
 }
 static void worker(void *p){
     char mac[32];unsigned k,j=0;(void)p;
     mttl_sdk_memory_init();
     mttl_sdk_network_init();
-    mttl_device_init(&device,1767225600ULL);mttl_sdk_mqtt_socket_init(&mqtt_socket);mttl_sdk_mqtt_socket_io(&mqtt_socket,&mqtt_io);
+    mttl_device_init(&device,1767225600ULL);
+#ifndef SFN_NATIVE_UP_ONLY
+    mttl_sdk_mqtt_socket_init(&mqtt_socket);mttl_sdk_mqtt_socket_io(&mqtt_socket,&mqtt_io);
+#endif
     mttl_sdk_relay_init(&device.hardware);
     {mttl_settings loaded;int result=mttl_sdk_settings_load(&loaded);if(result>=0){device.settings=loaded;device.persistent=result==1;}wipe((char *)&loaded,sizeof(loaded));}
     if(device.hardware.verified){device.control.known_mask=device.settings.relay_known;device.control.on_mask=device.settings.relay_on;}
@@ -260,6 +272,7 @@ static void worker(void *p){
         int scan_now=0,config_now;
         watchdog_worker_at=clock_ms(0);watchdog_worker_seen=1;
         taskENTER_CRITICAL();device.control.known_mask=relay_known;device.control.on_mask=relay_on;device.control.fault=relay_fault;taskEXIT_CRITICAL();
+#ifndef SFN_NATIVE_UP_ONLY
         /* Same MQTT socket owner, but bypass slow sensor/storage work while
          * relay completion is pending. Second step drains the state packet
          * queued by the first instead of leaving it until the next full loop. */
@@ -270,6 +283,7 @@ static void worker(void *p){
             publish_snapshots(clock_ms(0));
             vTaskDelay(1);continue;
         }
+#endif
         {int provision=0;taskENTER_CRITICAL();if(provision_requested&&!relay_busy&&!energy_barrier_state&&!occupied&&!config_occupied){provision=1;}taskEXIT_CRITICAL();
          if(provision&&storage_begin()){int reset;
           if(!device.control.fault){device.settings.relay_known=device.control.known_mask;device.settings.relay_on=device.control.on_mask;}
@@ -308,7 +322,7 @@ static void worker(void *p){
         }
         /* Radio initialization may be required before the SDK can read its MAC. */
         if(!identity[0]&&(life.network.state==MTTL_NET_AP||life.network.state==MTTL_NET_ONLINE)){memset(mac,0,sizeof(mac));j=0;if(wifi_get_mac_address(mac)==RTW_SUCCESS){for(k=0;mac[k]&&j<12;k++){char c=mac[k];if(c>='A'&&c<='F')c=(char)(c+32);if((c>='0'&&c<='9')||(c>='a'&&c<='f'))identity[j++]=c;}if(j!=12)identity[0]=0;}}
-        mttl_device_tick(&device,identity,life.network.state==MTTL_NET_ONLINE,clock_ms(0),&mqtt_io);
+        mttl_device_tick(&device,identity,life.network.state==MTTL_NET_ONLINE,clock_ms(0),SFN_MQTT_IO);
         /* Pulse adapter has already released coils; save only a completed queue. */
         if(!device.control.fault&&!mttl_sdk_energy_relay_saved(device.control.known_mask,device.control.on_mask)&&relay_save_ready(clock_ms(0))&&(!relay_save_retry||(uint32_t)(clock_ms(0)-relay_save_attempt_at)>=5000u)&&storage_begin()){
             device.settings.relay_known=device.control.known_mask;device.settings.relay_on=device.control.on_mask;

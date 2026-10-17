@@ -15,7 +15,7 @@
 #define mbedtls_sha256_process mttl_vendor_sha256_process
 #define mbedtls_sha256 mttl_vendor_sha256
 #define mbedtls_platform_zeroize mttl_vendor_platform_zeroize
-#include "../../work/reference/ameba-arduino-1/Arduino_package/hardware/system/component/common/network/ssl/mbedtls-2.16.1/library/sha256.c"
+#include "component/common/network/ssl/mbedtls-2.16.1/library/sha256.c"
 #include "ota_hash.h"
 typedef char hash_size_check[sizeof(mbedtls_sha256_context)<=sizeof(mttl_ota_hash)?1:-1];
 void mttl_vendor_platform_zeroize(void *p,size_t n){volatile uint8_t *q=p;while(n--)*q++=0;}
