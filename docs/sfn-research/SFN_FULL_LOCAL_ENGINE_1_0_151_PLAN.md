@@ -29,3 +29,13 @@ Safety priority for relay ON:
 ## Physical canary gate
 
 No 1.0.151 OTA until host/emulator QA proves: boot recovery, A/B flash interruption safety, clock validity, schedule persistence, voltage trip/restore, child-lock command semantics, queue replacement, relay arbitration and exact rollback. Then only owner canary `New` may be targeted; customer fleet rollout remains forbidden.
+
+## Unified persistent storage
+
+The previous scheduler and voltage-guard experiments both used sectors `0xFC000` and `0xFD000`; they cannot coexist as separate records. 1.0.151 therefore uses one A/B record (`SFNE`) containing the voltage policy and durable schedule generation/table together. Child lock remains in the vendor's independent `CL` record at key/address `0x900`.
+
+Host model `tools/sfn_full_local_engine_model.py` proves round-trip integrity, voltage-only updates retaining schedules, schedule-only updates retaining voltage policy, corruption fallback, and every interrupted-write cut point choosing either the complete old image or complete new image. Safety arbitration also proves a voltage trip vetoes protected ON actions from app/schedule/queue/cycle/button while OFF remains allowed; vendor child-lock affects physical-button eligibility only.
+
+## Additional executable space proof
+
+The stock oneM2M task entry is `0x100233D7`, referenced as a literal only at `0x100236D8` by wrapper `0x10023686`. Direct control-flow xref scanning found no external reference into `0x100233D6..0x10023634`. Helpers beginning at `0x1002363A` do have external callers and are excluded. This yields a 606-byte candidate reclaim window for the unified engine, subject to final bounded-diff and emulator gates.
