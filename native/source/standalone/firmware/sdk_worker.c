@@ -28,6 +28,9 @@
 #include "sdk_boot_guard.h"
 #endif
 #include "sfn_child_lock.h"
+#ifdef SFN_NATIVE_UP_ONLY
+#include "sfn_final_state.h"
+#endif
 #include "gpio_api.h"
 #include <stdio.h>
 #include <string.h>
@@ -53,7 +56,16 @@ static uint8_t config_occupied,occupied;
 static uint8_t energy_barrier_state; /* 0 idle, 1 requested, 2 saved, 3 failed */
 /* Four waiting commands, in addition to the active relay operation. */
 static uint8_t control_pending,control_head;
-static struct {uint32_t at;uint8_t channel,on;} control_queue[4];
+static struct {
+ uint32_t at;uint8_t channel,on;
+#ifdef SFN_NATIVE_UP_ONLY
+ uint8_t remote;uint32_t epoch;
+#endif
+} control_queue[4];
+#ifdef SFN_NATIVE_UP_ONLY
+static sfn_final_state up_final_state;
+static uint32_t up_link_epoch=1;
+#endif
 static SemaphoreHandle_t relay_wake;
 static mttl_control relay_control;
 static mttl_hardware_port relay_port;
@@ -100,18 +112,28 @@ static void storage_end(void){taskENTER_CRITICAL();storage_busy=0;taskEXIT_CRITI
 /* Debounce relay-state persistence from the LAST completed command, not
  * from the first change. A queued/active command cancels the quiet window. */
 static __attribute__((noinline)) int relay_save_ready(uint32_t now){int ready;taskENTER_CRITICAL();ready=!relay_busy&&!control_pending&&(uint32_t)(now-(relay_requested_at+relay_wait_ms+relay_run_ms))>=10000u;taskEXIT_CRITICAL();return ready;}
+#ifdef SFN_NATIVE_UP_ONLY
+static void cancel_waiting_remote_locked(void){unsigned i;for(i=0;i<control_pending;i++){unsigned q=(control_head+i)&3u;if(control_queue[q].remote)sfn_final_state_cancel_remote(&up_final_state);}}
+#endif
 static void relay_task(void *unused){mttl_output out={&relay_port,mttl_hardware_begin,mttl_hardware_end};(void)unused;
- for(;;){unsigned ch,on;uint32_t start;
+ for(;;){unsigned ch,on;uint32_t start;int requested,success;
+#ifdef SFN_NATIVE_UP_ONLY
+  unsigned remote;uint32_t remote_epoch;
+#endif
   xSemaphoreTake(relay_wake,portMAX_DELAY);
   for(;;){
   taskENTER_CRITICAL();
   if(!control_pending){taskEXIT_CRITICAL();break;}
   ch=control_queue[control_head].channel;on=control_queue[control_head].on;
+#ifdef SFN_NATIVE_UP_ONLY
+  remote=control_queue[control_head].remote;remote_epoch=control_queue[control_head].epoch;
+#endif
   relay_requested_at=control_queue[control_head].at;control_head=(control_head+1)&3;--control_pending;
   taskEXIT_CRITICAL();
   while(storage_busy)vTaskDelay(1); /* Never energize coils across NOR operations. */
   start=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS;
-  if(mttl_request(&relay_control,ch,on))do{
+  requested=mttl_request(&relay_control,ch,on);
+  if(requested)do{
    mttl_control_tick(&relay_control,&out,(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS);
    watchdog_relay_at=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS;
    taskENTER_CRITICAL();relay_known=relay_control.known_mask;relay_on=relay_control.on_mask;relay_fault=relay_control.fault;taskEXIT_CRITICAL();
@@ -122,7 +144,16 @@ static void relay_task(void *unused){mttl_output out={&relay_port,mttl_hardware_
   }while(!relay_control.fault&&(relay_control.active||relay_control.count));
   taskENTER_CRITICAL();relay_known=relay_control.known_mask;relay_on=relay_control.on_mask;relay_fault=relay_control.fault;
   relay_wait_ms=start-relay_requested_at;relay_run_ms=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS-start;++relay_sequence;
-  if(relay_fault)control_pending=0;
+  success=requested&&!relay_fault&&(ch==4?relay_known==15u:((relay_known&(1u<<ch))!=0&&((relay_on&(1u<<ch))!=0)==(on!=0)));
+#ifdef SFN_NATIVE_UP_ONLY
+  if(remote)(void)sfn_final_state_complete_remote(&up_final_state,remote_epoch,ch+1u,on,success);
+#endif
+  if(relay_fault){
+#ifdef SFN_NATIVE_UP_ONLY
+   cancel_waiting_remote_locked();
+#endif
+   control_pending=0;
+  }
   relay_busy=control_pending!=0;taskEXIT_CRITICAL();
   }
  }
@@ -165,7 +196,7 @@ static size_t sfn_up_handle(void *context,const sfn_up_command *command,char *ou
  mttl_device_app *d=context;uint32_t now=clock_ms(0);unsigned i;int32_t value;uint8_t known,on;
  if(!d||!command||!out)return 0;
  switch(command->type){
-  case SFN_UP_CMD_GETINFO_ALL:{sfn_up_outlet x[4];taskENTER_CRITICAL();known=relay_known;on=relay_on;taskEXIT_CRITICAL();
+  case SFN_UP_CMD_GETINFO_ALL:{sfn_up_outlet x[4];uint8_t busy;taskENTER_CRITICAL();known=relay_known;on=relay_on;busy=(uint8_t)(relay_busy||control_pending);taskEXIT_CRITICAL();if(busy)return 0;
    for(i=0;i<4;i++){int32_t power=0,temp=0,energy=(int32_t)d->settings.energy_wh[i];
     (void)mttl_sample_read(&d->samples.power[i],now,MTTL_SENSOR_MAX_AGE_MS,&power);
     if(mttl_sample_read(&d->samples.temperature[i],now,MTTL_SENSOR_MAX_AGE_MS,&temp))temp/=10;else temp=0;
@@ -173,7 +204,7 @@ static size_t sfn_up_handle(void *context,const sfn_up_command *command,char *ou
     x[i].channel=(uint8_t)(i+1);x[i].on=(known&(1u<<i))&&((on&(1u<<i))!=0);x[i].runtime=(int32_t)(now/1000u);x[i].state=(known&(1u<<i))?1:0;x[i].power_mw=power;x[i].energy_wh=energy<0?0:(uint32_t)energy;x[i].temperature_c=temp;x[i].overload="0";x[i].overheat="0";}
    return sfn_up_encode_getinfo(out,cap,x);}
   case SFN_UP_CMD_ONOFF:
-   if(control_enqueue(command->channel-1,command->on,0))return sfn_up_encode_onoff_ack(out,cap,command->channel,command->on);return 0;
+   (void)control_enqueue(command->channel-1,command->on,0);return 0;
   case SFN_UP_CMD_VOLTAGE:
    if(mttl_sample_read(&d->samples.voltage,now,MTTL_SENSOR_MAX_AGE_MS,&value)&&value>=0)return sfn_up_encode_voltage(out,cap,1,value*100);return 0;
   case SFN_UP_CMD_RSSI:
@@ -204,24 +235,50 @@ static size_t sfn_up_handle(void *context,const sfn_up_command *command,char *ou
   default:return 0;
  }
 }
-static void sfn_up_disconnect(void){if(device.up.state!=SFN_UP_LINK_OFF)sfn_up_client_reset(&device.up,&up_io);}
-static void sfn_up_service(int online){char host[16];uint32_t ip=device.settings.sfn_backend_ipv4;if(!online||!ip||!identity[0]){sfn_up_disconnect();return;}sfn_backend_text(ip,host);(void)sfn_up_client_step(&device.up,&up_io,1,host,device.settings.sfn_backend_port,clock_ms(0),"lgutap",identity,mttl_firmware_version,sfn_up_handle,&device);}
+static void sfn_up_bump_epoch(void){taskENTER_CRITICAL();if(++up_link_epoch==0)++up_link_epoch;taskEXIT_CRITICAL();}
+static void sfn_up_disconnect(void){if(device.up.state!=SFN_UP_LINK_OFF){sfn_up_bump_epoch();sfn_up_client_reset(&device.up,&up_io);}}
+static void sfn_up_final_confirmations(void){sfn_final_state_ack ack;uint32_t epoch;char frame[48];size_t n;int have;
+ taskENTER_CRITICAL();epoch=up_link_epoch;have=sfn_final_state_peek_current(&up_final_state,epoch,&ack);taskEXIT_CRITICAL();
+ if(!have||!sfn_up_client_ready(&device.up))return;n=sfn_up_encode_onoff_ack(frame,sizeof(frame),ack.channel,ack.on);if(!n)return;
+ if(sfn_up_client_publish(&device.up,frame,n)){taskENTER_CRITICAL();sfn_final_state_consume(&up_final_state);taskEXIT_CRITICAL();}
+}
+static void sfn_up_service(int online){char host[16];uint32_t ip=device.settings.sfn_backend_ipv4;sfn_up_link_state before,after;if(!online||!ip||!identity[0]){sfn_up_disconnect();return;}sfn_backend_text(ip,host);before=device.up.state;(void)sfn_up_client_step(&device.up,&up_io,1,host,device.settings.sfn_backend_port,clock_ms(0),"lgutap",identity,mttl_firmware_version,sfn_up_handle,&device);after=device.up.state;if((before==SFN_UP_LINK_ONLINE)!=(after==SFN_UP_LINK_ONLINE))sfn_up_bump_epoch();if(after==SFN_UP_LINK_ONLINE)sfn_up_final_confirmations();}
 static void sfn_up_physical_events(void){unsigned i;char frame[48];size_t n;if(relay_busy||control_pending||!up_physical_pending)return;for(i=0;i<5;i++)if(up_physical_pending&(1u<<i)){int state=i?((relay_on&(1u<<(i-1)))!=0):(relay_on==15);n=sfn_up_encode_event(frame,sizeof(frame),i,state);if(n&&sfn_up_client_publish(&device.up,frame,n))up_physical_pending=(uint8_t)(up_physical_pending&~(1u<<i));break;}}
 #endif
-static int control_enqueue(unsigned channel,unsigned on,int local){int ok=0;if(channel>4||on>1)return 0;taskENTER_CRITICAL();if(worker_started&&relay_wake&&(local||published.state==MTTL_NET_ONLINE)&&!energy_barrier_state&&!occupied&&!config_occupied&&control_pending<4&&device.hardware.verified&&!relay_fault&&!(on&&(channel==4?sfn_voltage_guard_blocked_mask(&voltage_guard_state,&device.settings.voltage_guard)!=0:(sfn_voltage_guard_blocked_mask(&voltage_guard_state,&device.settings.voltage_guard)&(1u<<channel))))){unsigned tail=(control_head+control_pending)&3;control_queue[tail].channel=channel;control_queue[tail].on=on;control_queue[tail].at=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS;++control_pending;
+static int control_enqueue(unsigned channel,unsigned on,int local){int ok=0;if(channel>4||on>1)return 0;taskENTER_CRITICAL();if(worker_started&&relay_wake&&(local||published.state==MTTL_NET_ONLINE)&&!energy_barrier_state&&!occupied&&!config_occupied&&control_pending<4&&device.hardware.verified&&!relay_fault&&!(on&&(channel==4?sfn_voltage_guard_blocked_mask(&voltage_guard_state,&device.settings.voltage_guard)!=0:(sfn_voltage_guard_blocked_mask(&voltage_guard_state,&device.settings.voltage_guard)&(1u<<channel))))){unsigned tail=(control_head+control_pending)&3;
+#ifdef SFN_NATIVE_UP_ONLY
+ int remote=!local;if(remote&&!sfn_final_state_reserve_remote(&up_final_state)){taskEXIT_CRITICAL();return 0;}control_queue[tail].remote=(uint8_t)remote;control_queue[tail].epoch=remote?up_link_epoch:0;
+#endif
+ control_queue[tail].channel=channel;control_queue[tail].on=on;control_queue[tail].at=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS;++control_pending;
 /* Publish the new progress timestamp atomically with busy, before waking
  * the relay task or allowing watchdog evaluation of this command. */
 watchdog_relay_at=control_queue[tail].at;relay_busy=1;if(channel==4)relay_desired=on?15:0;else if(on)relay_desired|=1u<<channel;else relay_desired&=~(1u<<channel);ok=1;}taskEXIT_CRITICAL();if(ok)xSemaphoreGive(relay_wake);return ok;}
-int mttl_sdk_control_request(unsigned channel,unsigned on){return control_enqueue(channel,on,0);}
+/* Local UI/device requests do not participate in the SFN TCP final-ACK contract. */
+int mttl_sdk_control_request(unsigned channel,unsigned on){return control_enqueue(channel,on,1);}
 /* Replace waiting ON commands with a priority ALL OFF; an active coil pulse
  * still finishes/release safely. No persistent lock or automatic re-enable. */
-static void protection_off(void){taskENTER_CRITICAL();if(relay_wake&&device.hardware.verified&&!relay_fault){control_head=0;control_pending=1;control_queue[0].channel=4;control_queue[0].on=0;control_queue[0].at=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS;watchdog_relay_at=control_queue[0].at;relay_busy=1;relay_desired=0;}taskEXIT_CRITICAL();if(relay_wake)xSemaphoreGive(relay_wake);}
+static void protection_off(void){taskENTER_CRITICAL();if(relay_wake&&device.hardware.verified&&!relay_fault){
+#ifdef SFN_NATIVE_UP_ONLY
+ cancel_waiting_remote_locked();
+#endif
+ control_head=0;control_pending=1;control_queue[0].channel=4;control_queue[0].on=0;
+#ifdef SFN_NATIVE_UP_ONLY
+ control_queue[0].remote=0;control_queue[0].epoch=0;
+#endif
+ control_queue[0].at=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS;watchdog_relay_at=control_queue[0].at;relay_busy=1;relay_desired=0;}taskEXIT_CRITICAL();if(relay_wake)xSemaphoreGive(relay_wake);}
 static void protection_off_mask(uint8_t mask){
  unsigned i;uint32_t now;int wake=0;if(!(mask&15u))return;if((mask&15u)==15u){protection_off();return;}
  now=(uint32_t)xTaskGetTickCount()*portTICK_RATE_MS;taskENTER_CRITICAL();
  if(relay_wake&&device.hardware.verified&&!relay_fault){
+#ifdef SFN_NATIVE_UP_ONLY
+  cancel_waiting_remote_locked();
+#endif
   control_head=0;control_pending=0;
-  for(i=0;i<4;i++)if(mask&(1u<<i)){unsigned tail=(control_head+control_pending)&3u;control_queue[tail].channel=(uint8_t)i;control_queue[tail].on=0;control_queue[tail].at=now;++control_pending;}
+  for(i=0;i<4;i++)if(mask&(1u<<i)){unsigned tail=(control_head+control_pending)&3u;control_queue[tail].channel=(uint8_t)i;control_queue[tail].on=0;
+#ifdef SFN_NATIVE_UP_ONLY
+   control_queue[tail].remote=0;control_queue[tail].epoch=0;
+#endif
+   control_queue[tail].at=now;++control_pending;}
   if(control_pending){watchdog_relay_at=now;relay_busy=1;relay_desired=(uint8_t)(relay_desired&~mask);wake=1;}
  }
  taskEXIT_CRITICAL();if(wake)xSemaphoreGive(relay_wake);
@@ -347,7 +404,7 @@ static void worker(void *p){
 #ifndef SFN_NATIVE_UP_ONLY
     mttl_sdk_mqtt_socket_init(&mqtt_socket);mttl_sdk_mqtt_socket_io(&mqtt_socket,&mqtt_io);
 #else
-    sfn_sdk_up_socket_init(&up_socket);sfn_sdk_up_socket_io(&up_socket,&up_io);
+    sfn_sdk_up_socket_init(&up_socket);sfn_sdk_up_socket_io(&up_socket,&up_io);sfn_final_state_init(&up_final_state);
 #endif
     mttl_sdk_relay_init(&device.hardware);
     {mttl_settings loaded;int result=mttl_sdk_settings_load(&loaded);if(result>=0){device.settings=loaded;device.persistent=result==1;}wipe((char *)&loaded,sizeof(loaded));}

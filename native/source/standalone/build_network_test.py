@@ -45,7 +45,7 @@ def main():
     assert syms['__mttl_msp_top']-syms['__mttl_msp_limit']==4096
     body,sections=initialized_body(elf.read_bytes())
     assert (b'NETWORK_OTA_TEST_RAM_SETTINGS_' if ota else b'NETWORK_TEST_NO_OTA_RAM_SETTINGS\0') in body
-    assert '2.0.12' in inspect_image(package_body(body)[0]).version_candidates
+    assert '2.0.13' in inspect_image(package_body(body)[0]).version_candidates
     # Inspect actual setup machine code: a direct BL must start the worker.
     import re
     dis=run('arm-none-eabi-objdump','-d',elf)
@@ -81,11 +81,11 @@ def main():
     assert syms['mttl_native_ota_hardware']==0x10006018
     files=[]
     for ext,data in (('bin',raw),('fwr',fwr)):
-        path=out/(('mttl-w01-2.0.12-network-OTA-test.' if ota else 'mttl-w01-2.0.12-network-test-NO-OTA.')+ext)
+        path=out/(('mttl-w01-2.0.13-network-OTA-test.' if ota else 'mttl-w01-2.0.13-network-test-NO-OTA.')+ext)
         path.write_bytes(data)
         assert inspect_image(path.read_bytes()).decoded==raw
         files.append({'path':str(path),'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
-    report={'version':'2.0.12','profile':'NETWORK_OTA_TEST_RAM_SETTINGS' if ota else 'NETWORK_TEST_NO_OTA_RAM_SETTINGS',
+    report={'version':'2.0.13','profile':'NETWORK_OTA_TEST_RAM_SETTINGS' if ota else 'NETWORK_TEST_NO_OTA_RAM_SETTINGS',
             'elf_sha256':hashlib.sha256(elf.read_bytes()).hexdigest(),'files':files,
             'network_start_verified_in_setup_machine_code':True,
             'setup_arm_mock_success_failure_cases':2,
@@ -114,6 +114,6 @@ def main():
     (out/'manifest.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     if ota:
         import shutil
-        shutil.copyfile(out/'mttl-w01-2.0.12-network-OTA-test.fwr',out/('comMTTL-W01_2.0.12-build-'+build_id+'.fwr'))
+        shutil.copyfile(out/'mttl-w01-2.0.13-network-OTA-test.fwr',out/('comMTTL-W01_2.0.13-build-'+build_id+'.fwr'))
     print(json.dumps(report,indent=2))
 if __name__=='__main__':main()

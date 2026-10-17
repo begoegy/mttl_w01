@@ -26,6 +26,6 @@ size_t mttl_ha_discovery(const mttl_settings *s,const char *id,unsigned index,ch
     if(n<0||(size_t)n>=sizeof(extra))return 0;
     short_id=id+5;if(!quote(s->device,device,sizeof(device)))return 0;
     n=snprintf(topic,tcap,"homeassistant/%s/mttl_%s_%s/config",component,short_id,key);if(n<0||(size_t)n>=tcap)return 0;
-    n=snprintf(json,cap,"{\"~\":\"%s\",\"name\":%s,\"uniq_id\":\"mttl_%s_%s\",\"default_entity_id\":\"%s.mttl_%s_%s\",\"en\":true,\"stat_t\":\"~/%s\",\"avty_t\":\"~/availability\",%s\"dev\":{\"ids\":[\"mttl_%s\"],\"name\":%s,\"mdl\":\"MTTL-W01\",\"mf\":\"LG U+\",\"sw\":\"2.0.12\"}}",base,name,short_id,key,component,short_id,key,index==5?"power":key,extra,short_id,device);
+    n=snprintf(json,cap,"{\"~\":\"%s\",\"name\":%s,\"uniq_id\":\"mttl_%s_%s\",\"default_entity_id\":\"%s.mttl_%s_%s\",\"en\":true,\"stat_t\":\"~/%s\",\"avty_t\":\"~/availability\",%s\"dev\":{\"ids\":[\"mttl_%s\"],\"name\":%s,\"mdl\":\"MTTL-W01\",\"mf\":\"LG U+\",\"sw\":\"2.0.13\"}}",base,name,short_id,key,component,short_id,key,index==5?"power":key,extra,short_id,device);
     if(n<0||(size_t)n>=cap)return 0;return (size_t)n;
 }

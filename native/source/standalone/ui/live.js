@@ -106,7 +106,7 @@
     for(const [attr,target] of [['data-i18n',null],['data-i18n-placeholder','placeholder'],['data-i18n-aria','aria-label']])document.querySelectorAll('['+attr+']').forEach(n=>target?n.setAttribute(target,t(n.getAttribute(attr))):n.textContent=t(n.getAttribute(attr)));
     document.querySelector('.badge').textContent=t('deviceIntegration');document.querySelector('.note').textContent=t('liveNote');
     el('scan').textContent=t('realScan');document.querySelector('#wifi-form button.primary').textContent=t('realConnect');
-    el('current-firmware-version').textContent='2.0.12';el('firmware-status').textContent=t('integrationPending');el('mqtt-status').textContent=t('integrationPending');el('firmware-selected').textContent=t('noSelectedFile');
+    el('current-firmware-version').textContent='2.0.13';el('firmware-status').textContent=t('integrationPending');el('mqtt-status').textContent=t('integrationPending');el('firmware-selected').textContent=t('noSelectedFile');
     document.querySelector('#mqtt-form button.primary').textContent=language==='en'?'Save to device':'기기에 저장';
     renderLog();render();
   }

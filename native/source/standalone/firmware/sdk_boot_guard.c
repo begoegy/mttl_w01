@@ -9,7 +9,7 @@
 #include <string.h>
 extern flash_t flash;
 extern unsigned char __ram_image2_text_start__[];
-static const uint8_t sfn_native_guard_marker[32]="SFN-NATIVE-GUARD-2.0.12-A1";
+static const uint8_t sfn_native_guard_marker[32]="SFN-NATIVE-GUARD-2.0.13-A1";
 static sfn_boot_guard_state guard_state;
 static uint32_t online_since;
 static uint8_t online_seen;

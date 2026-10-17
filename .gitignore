@@ -31,3 +31,6 @@ work/reference/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Generated native firmware build outputs
+native/source/standalone/results/
