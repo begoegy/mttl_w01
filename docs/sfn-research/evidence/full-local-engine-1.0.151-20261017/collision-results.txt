@@ -1,0 +1,13 @@
+LEGACY_STACKING=REFUSE
+local_queue_1.0.150 <-> offline_scheduler_1.0.149: 0x1001eb6c..0x1001ee54 (main payload / scheduler runtime)
+local_queue_1.0.150 <-> offline_scheduler_1.0.149: 0x1001ee5c..0x1001ee9c (queue data/ack / scheduler ack/state)
+local_queue_1.0.150 <-> voltage_guard_1.0.77: 0x1001606a..0x10016130 (factory handler / guard command handler)
+local_queue_1.0.150 <-> voltage_guard_1.0.77: 0x1001eb6c..0x1001ee54 (main payload / guard runtime)
+local_queue_1.0.150 <-> voltage_guard_1.0.77: 0x1001ee5c..0x1001ee9c (queue data/ack / guard ack/state)
+offline_scheduler_1.0.149 <-> voltage_guard_1.0.77: 0x10009914..0x10009a12 (scheduler task / guard task)
+offline_scheduler_1.0.149 <-> voltage_guard_1.0.77: 0x1001600c..0x1001602e (memory handler hook / guard memory hook)
+offline_scheduler_1.0.149 <-> voltage_guard_1.0.77: 0x1001eb6c..0x1001ee54 (scheduler runtime / guard runtime)
+offline_scheduler_1.0.149 <-> voltage_guard_1.0.77: 0x1001ee5c..0x1001eea8 (scheduler ack/state / guard ack/state)
+DESIGN_REQUIREMENT=single_shared_local_engine
+PRESERVE_VENDOR_CHILDLOCK=required
+NO_DEVICE_IO NO_FLASH NO_OTA
