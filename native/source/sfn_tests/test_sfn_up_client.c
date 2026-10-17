@@ -18,6 +18,9 @@ int main(void){sfn_up_client c;sfn_up_io io;mock m;uint32_t now=0;char event[64]
  n=sfn_up_encode_event(event,sizeof(event),3,0);assert(sfn_up_client_publish(&c,event,n));stepn(&c,&io,&m,&now,20);assert(strstr(m.sent,"up:event:onoff:3:off\r\n"));
  /* Unknown command is rejected without dropping a healthy transport. */
  feed(&m,"up:ota:10.0.0.1\r\n");stepn(&c,&io,&m,&now,20);assert(c.rejected==1&&c.state==SFN_UP_LINK_ONLINE);
+ /* A dead TCP path (what keepalive reports after a WAN black-hole) must close,
+  * back off, and establish a fresh session without rebooting the device. */
+ {unsigned reconnects=c.reconnects;int closed=m.closed;m.recv_fail=1;stepn(&c,&io,&m,&now,1);assert(c.state==SFN_UP_LINK_BACKOFF&&m.closed==closed+1);m.recv_fail=0;now+=2100;stepn(&c,&io,&m,&now,30);assert(c.state==SFN_UP_LINK_ONLINE&&c.boot_sent&&c.reconnects>reconnects);}
  /* Oversized unterminated input forces reconnect rather than buffer overrun/desync. */
  {char huge[300];memset(huge,'A',sizeof(huge));memcpy(m.input+m.in_size,huge,sizeof(huge));m.in_size+=sizeof(huge);}stepn(&c,&io,&m,&now,60);assert(c.io_failures>=1&&m.closed>=1);
  /* Network-down closes immediately and clears state. */

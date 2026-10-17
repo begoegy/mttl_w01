@@ -32,6 +32,7 @@ The first firmware admitted to the final-state protocol is **2.0.13**. 2.0.12 is
 - Physical buttons and the local web control path remain local and do not consume SFN remote-confirmation slots.
 - Child lock continues to affect physical-button events only; it does not block authenticated remote SFN commands.
 - The confirmation queue is bounded to four remote commands, matching a four-outlet batch.
+- The native TCP socket now enables TCP keepalive (30 s idle, 10 s interval, 3 probes). This fixes the observed WAN-outage case where Wi-Fi can remain associated while the old TCP path is dead. A failed keepalive is reported through the existing socket error path, which closes the stale connection and reconnects with normal bounded backoff; no device reboot is required.
 
 ## Server compatibility
 
@@ -62,7 +63,7 @@ PASS:
 - 10,000 deterministic confirmation cycles without queue overflow;
 - voltage-guard ON veto;
 - child-lock local-button semantics independent from remote confirmation;
-- SFN protocol/client tests, including oversized input reconnect behavior;
+- SFN protocol/client tests, including oversized input reconnect behavior and dead-TCP-path close/backoff/reconnect without device reboot;
 - schedule transaction/wire tests;
 - settings migration tests;
 - Boot Guard power-cut test at 19 injected write-failure points.
@@ -109,10 +110,10 @@ Pinned Ameba toolchain, source-built Native profile, sensor + relay enabled, Boo
 Two clean builds after final source review were byte-identical:
 
 - Version: `2.0.13`
-- FWR bytes: `315248`
-- FWR SHA-256: `b1ee89ceecf2aa00cd0e9e6edea6cd8efa8fdc45522a5ffa49620ff4e0f8fadb`
-- ELF SHA-256: `91d89641e43a60dbe6d4c67691eff8e1ad31b25b3c703aac8c06c7286aef1ca2`
-- Static gap to reserved MSP: `13032` bytes
+- FWR bytes: `315360`
+- FWR SHA-256: `33fa9cabede0fd144eaf77b2b9b668db86181497b6c7862c80e61c097d3aeda8`
+- ELF SHA-256: `8f68de1fcf180dc678f7182294257ebe00323dcaad9a6b5d762d07a8f4418a24`
+- Static gap to reserved MSP: `12920` bytes
 - Reserved MSP: `4096` bytes
 - Initial RTOS heap: `39936` bytes
 - `ota_write_enabled=false`
@@ -126,7 +127,7 @@ Stack compile estimates from `-fstack-usage`:
 - network worker frame: `1136` bytes; task allocation is 1536 stack words (6144 bytes);
 - largest individual compiled frame in the image: `publish_snapshots` at `2056` bytes.
 
-No compile warning is attributed to `sdk_worker.c` or `sfn_final_state.c`; the linker warning baseline is from the legacy Realtek SDK libraries/toolchain enum ABI warnings.
+No compile warning is attributed to `sdk_worker.c`, `sfn_final_state.c`, `sdk_up_socket.c`, or `sfn_up_client.c`; the linker warning baseline is from the legacy Realtek SDK libraries/toolchain enum ABI warnings.
 
 ## Recovery material
 
@@ -138,7 +139,7 @@ This is a recovery mechanism, **not a guarantee** if a new image fails before it
 
 ## Preserved lab artifact
 
-`/srv/sfn-power-research/lab-artifacts/sfn-native-final-state-20261017/DO-NOT-FLASH-sfn-native-2.0.13-final-state-lab.fwr`
+`/srv/sfn-power-research/lab-artifacts/sfn-native-final-state-reconnect-20261017/DO-NOT-FLASH-sfn-native-2.0.13-final-state-reconnect-lab.fwr`
 
 This path is lab-only and is not registered in the active production firmware catalog.
 
@@ -147,7 +148,7 @@ This path is lab-only and is not registered in the active production firmware ca
 1. Back up production server state and deploy the **gated** server change first; verify legacy devices stay on the unchanged path.
 2. Do not flash any device until owner approval.
 3. With explicit approval, use New2 only as the physical 2.0.13 canary and verify the exact FWR SHA above before write.
-4. Physical checks must cover single outlet, all outlets, rapid commands, voltage guard, child lock, reconnect, schedules, and server/UI result consistency.
+4. Physical checks must cover single outlet, all outlets, rapid commands, voltage guard, child lock, reconnect, **WAN loss then WAN recovery without power-cycling the strip**, schedules, and server/UI result consistency.
 5. Stop and use the existing guarded recovery path if New2 fails any physical gate.
 
 Lab success is not physical success.
