@@ -1,5 +1,7 @@
 # SFN Full Local Engine 1.0.152 — Timer Architecture Gate
 
+> **UPDATE — PHYSICAL REJECTED 2026-10-17.** R3 completed transfer on owner canary New but did not return after reboot. Do not flash. See `SFN_FULL_LOCAL_ENGINE_1_0_152_PHYSICAL_REJECTION_2026-10-17.md`.
+
 Date: 2026-10-17
 Status: **LAB PASS / PHYSICAL CANARY PENDING**
 Scope: MTTL-W01 HW002 family, owner `New` canary path only. This document does **not** authorize OTA.

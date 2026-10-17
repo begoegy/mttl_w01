@@ -1,0 +1,13 @@
+seq  at                   kind               phase        progress  bytes_sent  message                                                      
+---  -------------------  -----------------  -----------  --------  ----------  -------------------------------------------------------------
+1    2026-10-17 11:07:54  queued             queued       0.0       0           Firmware update queued                                       
+2    2026-10-17 11:07:54  phase              preflight    0.0       0           Preflight checks passed                                      
+3    2026-10-17 11:07:54  phase              offered      0.0       0           OTA offer armed; background polling paused for transfer      
+4    2026-10-17 11:07:54  download           downloading  0.0       0           Firmware download started                                    
+5    2026-10-17 11:07:55  progress           downloading  25.1      82432       Firmware download 25%                                        
+6    2026-10-17 11:07:56  progress           downloading  50.1      164352      Firmware download 50%                                        
+7    2026-10-17 11:07:57  progress           downloading  75.1      246272      Firmware download 75%                                        
+8    2026-10-17 11:07:58  progress           downloading  100.0     327944      Firmware download 100%                                       
+9    2026-10-17 11:07:58  download_complete  transferred  100.0     327944      Firmware download completed                                  
+10   2026-10-17 11:07:59  phase              rebooting    100.0     327944      Firmware transferred; waiting for device reboot and reconnect
+11   2026-10-17 11:10:30  failed             failed       100.0     327944      Device did not return on expected firmware 0.1.55-1.0.152    

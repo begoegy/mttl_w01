@@ -1,0 +1,3 @@
+id                status  phase   progress  bytes_sent  bytes_total  rollback_status  error_code         error_message                                              started_at        finished_at     
+----------------  ------  ------  --------  ----------  -----------  ---------------  -----------------  ---------------------------------------------------------  ----------------  ----------------
+9a073ea14ec71d22  failed  failed  100.0     327944      327944       blocked_offline  reconnect_timeout  Device did not return on expected firmware 0.1.55-1.0.152  1792228074.41097  1792228230.25625
