@@ -1,0 +1,2 @@
+{'format': 'LG U+ FWR (XOR)', 'size': 327944, 'body_size': 327924, 'entry': 268460145, 'checksum': 33068412, 'sha256': 'b75e394e77c7ec2e8598bb98d157980bd889cc06989cf8fc9702d6bfc20fba8f', 'version_candidates': ('0.1.55', '1.0.150')}
+INDEPENDENT_UNIVERSAL_FWR_VALIDATOR=PASS

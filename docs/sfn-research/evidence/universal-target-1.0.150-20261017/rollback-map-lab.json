@@ -1,0 +1,25 @@
+{
+  "status": "LAB_ONLY_NOT_REGISTERED_NOT_DEPLOYED",
+  "hardware": "LGU+-TAP-HW002",
+  "model": "MTTL-W01",
+  "target": {
+    "version": "0.1.55-1.0.150",
+    "file": "/srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.150-universal-envelope-lab.fwr",
+    "sha256": "b75e394e77c7ec2e8598bb98d157980bd889cc06989cf8fc9702d6bfc20fba8f"
+  },
+  "rollback_by_exact_source": {
+    "0.1.54-1.0.66": {
+      "file": "/var/lib/sfn-power/firmware/comMTTL-W01_1.0.66.fwr",
+      "sha256": "d780b578af69d52f3a05191a8e7d91a20e05085a912722327481cd5663682c04"
+    },
+    "0.1.54-1.0.105": {
+      "file": "/srv/sfn-power-research/vendor-sources/MTTL-W01_V1.0.105.fwr",
+      "sha256": "f78aee903d392f2b8470c845d9e76c33d91fdcf1da57e6c7e714cbedc9edaefa"
+    },
+    "0.1.55-1.0.146": {
+      "file": "/var/lib/sfn-power/firmware/comMTTL-W01_1.0.146-voltra-public.fwr",
+      "sha256": "ae997d79f8e54376a4eb94e447cf94582311544aa128ff4a487d2190f67208ad"
+    }
+  },
+  "policy": "One universal target artifact; rollback must always use the exact pre-flash source artifact. No wildcard rollback. No OTA authorization in this file."
+}

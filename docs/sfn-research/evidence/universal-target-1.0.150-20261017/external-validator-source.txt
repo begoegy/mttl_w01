@@ -1,0 +1,2 @@
+external_repo_commit=526104e3fb7e87e2d01b32c6356b1b5c72dab019
+external_repo=https://github.com/af950833/mttl_w01_standalone
