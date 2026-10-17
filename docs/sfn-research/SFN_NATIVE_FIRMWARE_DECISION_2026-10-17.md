@@ -79,3 +79,21 @@ Verification:
 - `SFN_UP_PROTOCOL_TESTS=PASS` under host GCC with `-Wall -Wextra -Werror -pedantic`;
 - C-generated BootInfo/GetInfo/Voltage/RSSI/ACK/Event frames parsed by the current production SFN Python protocol parser: `SFN_PRODUCTION_PARSER_CROSSCHECK=PASS`;
 - Child Lock response parsed by current child-lock server branch: `SFN_CHILDLOCK_PARSER_CROSSCHECK=PASS`.
+
+## Phase 2B — UP client engine
+Status: **HOST PASS / SDK SOCKET ADAPTER NOT YET LINKED / OTA DISABLED**.
+
+Added a bounded, allocation-free UP client engine:
+- non-blocking connect state;
+- reconnect backoff (1/2/4/8/16/30 seconds);
+- BootInfo sent first on every new session;
+- bounded 256-byte RX and 1024-byte TX buffers;
+- partial send/receive handling;
+- multiple CRLF-framed commands handled without unbounded queues;
+- oversized unterminated input drops the session instead of overflowing/desynchronizing;
+- network-down closes immediately;
+- command responses are single-flight/bounded;
+- unsolicited events can publish only when the client is fully ready;
+- `up:ota` remains unsupported/rejected by design.
+
+Verification: `SFN_UP_CLIENT_TESTS=PASS` with host GCC `-Wall -Wextra -Werror -pedantic`, including partial I/O, reconnect/backoff, malformed/unknown command behavior, overflow recovery and physical-event publish.
