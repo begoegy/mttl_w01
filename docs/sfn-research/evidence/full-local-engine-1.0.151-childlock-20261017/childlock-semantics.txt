@@ -1,0 +1,15 @@
+mask_00=ACTIVE,ACTIVE,ACTIVE,ACTIVE,ACTIVE
+mask_01=LOCKED,ACTIVE,ACTIVE,ACTIVE,ACTIVE
+mask_02=ACTIVE,LOCKED,ACTIVE,ACTIVE,ACTIVE
+mask_04=ACTIVE,ACTIVE,LOCKED,ACTIVE,ACTIVE
+mask_08=ACTIVE,ACTIVE,ACTIVE,LOCKED,ACTIVE
+mask_16=ACTIVE,ACTIVE,ACTIVE,ACTIVE,LOCKED
+mask_31=LOCKED,LOCKED,LOCKED,LOCKED,LOCKED
+mask0_unlock_all=PASS
+bit0_master_lock=PASS
+bits1_4_outlet_locks=PASS
+mask31_lock_all=PASS
+vendor_childlock_bytes_preserved_in_1.0.151=PASS
+persistent_CL_record_format_and_key_pinned=PASS
+app_server_relay_path_separate=PASS
+NO_DEVICE_IO NO_FLASH NO_OTA
