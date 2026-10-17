@@ -1,0 +1,5 @@
+1a3b66c4a43e63aa54615646b50f2c8507c57c3ce604be3f72211616f1379881  /srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.147-neutral-lab.fwr
+e70ba96726dc2a0093685fe5f5fb9e0bc8c71017a6676c51bf2abb3301a76098  /srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.151-full-local-engine-r3-a.fwr
+e70ba96726dc2a0093685fe5f5fb9e0bc8c71017a6676c51bf2abb3301a76098  /srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.151-full-local-engine-r3-b.fwr
+44e46fa430d99492e37ca0ad50fdec3d8eefb7a8d4ac8abf5f8344fc05f4c36b  /srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.151-full-local-engine-universal-r3-a.fwr
+44e46fa430d99492e37ca0ad50fdec3d8eefb7a8d4ac8abf5f8344fc05f4c36b  /srv/sfn-power-research/lab-artifacts/comMTTL-W01_1.0.151-full-local-engine-universal-r3-b.fwr
