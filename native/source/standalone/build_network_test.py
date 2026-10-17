@@ -7,7 +7,7 @@ from standalone.image2_analysis import initialized_body,package_body
 from standalone.ota import inspect_image
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');parser.add_argument('--sensor-test',action='store_true');parser.add_argument('--relay-test',action='store_true');parser.add_argument('--no-watchdog',action='store_true');parser.add_argument('--legacy-relay-timing',action='store_true');parser.add_argument('--sfn-native',action='store_true');options=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');parser.add_argument('--sensor-test',action='store_true');parser.add_argument('--relay-test',action='store_true');parser.add_argument('--no-watchdog',action='store_true');parser.add_argument('--legacy-relay-timing',action='store_true');parser.add_argument('--sfn-native',action='store_true');parser.add_argument('--sfn-backend-ip',default='');parser.add_argument('--sfn-backend-port',type=int,default=10086);options=parser.parse_args()
     if (options.no_watchdog or options.legacy_relay_timing) and not options.ota_test:parser.error('comparison flags require ota-test')
     if options.sensor_test and not (options.ota_test or options.sfn_native):parser.error('sensor-test requires ota-test or sfn-native')
     if options.relay_test and not options.sensor_test:parser.error('relay-test requires sensor-test')
@@ -26,7 +26,7 @@ def main():
         with (sdk/'ota_test_config.h').open('a',encoding='utf-8') as config:
             config.write('#define MTTL_DISABLE_WATCHDOG '+str(int(options.no_watchdog))+'\n#define MTTL_LEGACY_RELAY_TIMING '+str(int(options.legacy_relay_timing))+'\n')
     subprocess.run([sys.executable,str(ROOT/'standalone/build_assets.py'),*(['--ota-test'] if ota else [])],cwd=ROOT,check=True)
-    subprocess.run([sys.executable,str(ROOT/'analysis/build_minimal_network.py'),'--standalone','--network-test',*(['--ota-test'] if ota else []),*(['--sensor-test'] if options.sensor_test else []),*(['--relay-test'] if options.relay_test else []),*(['--sfn-native'] if options.sfn_native else [])],cwd=ROOT,check=True)
+    subprocess.run([sys.executable,str(ROOT/'analysis/build_minimal_network.py'),'--standalone','--network-test',*(['--ota-test'] if ota else []),*(['--sensor-test'] if options.sensor_test else []),*(['--relay-test'] if options.relay_test else []),*(['--sfn-native','--sfn-backend-ip',options.sfn_backend_ip,'--sfn-backend-port',str(options.sfn_backend_port)] if options.sfn_native else [])],cwd=ROOT,check=True)
     sdk=out/'sdk';elf=sdk/'offline-only.axf'
     tool=Path(os.environ['MTTL_GCC_DIR'])/'bin'
     def gcc_tool(name):
@@ -101,6 +101,8 @@ def main():
     report['watchdog_enabled']=not options.no_watchdog
     report['legacy_relay_timing']=options.legacy_relay_timing
     report['sfn_native_up_only']=options.sfn_native
+    report['sfn_backend_ip']=options.sfn_backend_ip if options.sfn_native else None
+    report['sfn_backend_port']=options.sfn_backend_port if options.sfn_native else None
     (out/'manifest.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     if ota:
         import shutil

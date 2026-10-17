@@ -81,7 +81,7 @@ unsigned mttl_settings_mock_tests(void){
     for(i=0;i<64;i++){out.device[i]='a';out.channel[0][i]=out.channel[1][i]=out.channel[2][i]=out.channel[3][i]='a';out.wifi_password[i]='a';out.mqtt_user[i]=out.mqtt_password[i]=out.topic[i]='a';}
     for(i=0;i<32;i++)out.ssid[i]='a';for(i=0;i<253;i++)out.broker[i]='a';
     size=mttl_settings_storage_pack(&out,loaded,sizeof(loaded));
-    if(size!=972||!mttl_settings_storage_unpack(loaded,size,&out))++failed;
+    if(size!=990||!mttl_settings_storage_unpack(loaded,size,&out))++failed;
     /* Recreate the malformed unknown-schema record test input. */
     n=mttl_settings_pack(&s,body,sizeof(body));
     body[0]=2;
@@ -90,5 +90,17 @@ unsigned mttl_settings_mock_tests(void){
     if(mttl_config_load(&io,&config_workspace,&out)!=-1||out.port!=123)++failed;
     if(mttl_config_save(&io,&config_workspace,&s)!=-1||erase_calls!=before)++failed;
     for(i=0;i<sizeof(config_workspace);i++)if(((uint8_t *)&config_workspace)[i]){++failed;break;}
+    /* SFN provisioning is atomic with Wi-Fi/settings: a torn backend change must leave old endpoint. */
+    for(i=0;i<sizeof(memory);i++)((uint8_t *)memory)[i]=255;
+    mttl_settings_default(&s);s.sfn_backend_ipv4=0xc000020au;s.sfn_backend_port=10086;
+    cut=-1;if(mttl_config_save(&io,&config_workspace,&s)!=1)++failed;
+    if(mttl_config_load(&io,&config_workspace,&out)!=1||out.sfn_backend_ipv4!=0xc000020au||out.sfn_backend_port!=10086)++failed;
+    s.sfn_backend_ipv4=0xc0000214u;s.sfn_backend_port=21197;
+    for(i=0;i<sizeof(cuts)/sizeof(cuts[0]);i++){
+        cut=cuts[i];if(mttl_config_save(&io,&config_workspace,&s)!=-1)++failed;
+        if(mttl_config_load(&io,&config_workspace,&out)!=1||out.sfn_backend_ipv4!=0xc000020au||out.sfn_backend_port!=10086)++failed;
+    }
+    cut=-1;if(mttl_config_save(&io,&config_workspace,&s)!=1)++failed;
+    if(mttl_config_load(&io,&config_workspace,&out)!=1||out.sfn_backend_ipv4!=0xc0000214u||out.sfn_backend_port!=21197)++failed;
     return failed;
 }

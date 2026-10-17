@@ -1,6 +1,6 @@
 """Compile/link experiment only. Does not create OTA files or access a device."""
 from pathlib import Path
-import re, subprocess, json, argparse, os
+import re, subprocess, json, argparse, os, ipaddress
 parser=argparse.ArgumentParser()
 parser.add_argument('--reserve-bytes',type=int,default=0)
 parser.add_argument('--standalone',action='store_true',help='Build the 2.0.0 offline baseline in standalone/results/sdk')
@@ -9,12 +9,21 @@ parser.add_argument('--ota-test',action='store_true',help='Opt-in self-OTA test 
 parser.add_argument('--sensor-test',action='store_true',help='Experimental sensor GPIO profile, requires OTA test')
 parser.add_argument('--relay-test',action='store_true',help='Experimental output profile; requires sensor-test')
 parser.add_argument('--sfn-native',action='store_true',help='Build SFN UP-only profile without standalone MQTT/Home Assistant')
+parser.add_argument('--sfn-backend-ip',default='',help='Pinned SFN backend IPv4; required for --sfn-native')
+parser.add_argument('--sfn-backend-port',type=int,default=10086)
 args=parser.parse_args()
 if args.ota_test and not args.network_test: parser.error('ota-test requires network-test')
 if args.sensor_test and not (args.ota_test or args.sfn_native): parser.error('sensor-test requires ota-test or sfn-native')
 if args.relay_test and not args.sensor_test: parser.error('relay-test requires sensor-test')
 if args.network_test and not args.standalone: parser.error('network-test requires standalone')
 if args.reserve_bytes < 0: parser.error('reserve-bytes must not be negative')
+if args.sfn_native:
+ try: sfn_ip=ipaddress.IPv4Address(args.sfn_backend_ip)
+ except ipaddress.AddressValueError: parser.error('--sfn-native requires a valid --sfn-backend-ip')
+ if sfn_ip.is_unspecified or sfn_ip.is_loopback or sfn_ip.is_multicast or int(sfn_ip)==0xffffffff: parser.error('unsafe --sfn-backend-ip')
+ if not 1<=args.sfn_backend_port<=65535: parser.error('invalid --sfn-backend-port')
+else:
+ sfn_ip=None
 ROOT=Path(__file__).resolve().parents[1]
 hw=Path(os.environ.get('MTTL_SDK_DIR',str(ROOT/'work/reference/ameba-arduino-1/Arduino_package/hardware')))
 out=ROOT/('analysis/ghidra/reports/minimal-network-build' if not args.reserve_bytes else f'analysis/ghidra/reports/minimal-network-budget-{args.reserve_bytes}')
@@ -44,7 +53,9 @@ if args.network_test:
 if args.ota_test: common += ['-DMTTL_OTA_TEST=1']
 if args.sensor_test: common += ['-DMTTL_SENSOR_TEST=1']
 if args.relay_test: common += ['-DMTTL_RELAY_TEST=1']
-if args.sfn_native: common += ['-DSFN_NATIVE_UP_ONLY=1']
+if args.sfn_native:
+ (out/'sfn_native_build_config.h').write_text('#ifndef SFN_NATIVE_BUILD_CONFIG_H\n#define SFN_NATIVE_BUILD_CONFIG_H\n#define SFN_NATIVE_BACKEND_IPV4 0x%08Xu\n#define SFN_NATIVE_BACKEND_PORT %du\n#endif\n' % (int(sfn_ip),args.sfn_backend_port),encoding='ascii')
+ common += ['-DSFN_NATIVE_UP_ONLY=1']
 sources=[ROOT/'analysis/minimal_network_link.cpp',ROOT/'analysis/bounded_sbrk.c',ROOT/'analysis/http_only_adapter.c',ROOT/'analysis/newlib_scheduler_guard.c',hw/'variants/rtl8710/variant.cpp']
 if args.standalone:
  sources[0]=ROOT/'standalone/firmware/sdk_baseline.cpp'
@@ -73,7 +84,7 @@ if args.standalone:
  sources.append(ROOT/'standalone/firmware/sdk_dhcp.c')
  sources.append(ROOT/'standalone/firmware/sdk_httpd_core.c')
  sources.append(ROOT/'standalone/firmware/sdk_worker.c')
- for name in ('meter_probe','meter_bus','meter_init','meter_convert','sdk_meter','sdk_energy','sdk_memory','sdk_relay','sdk_sse','sfn_voltage_guard','sfn_child_lock','sfn_up_protocol','sfn_up_client'):
+ for name in ('meter_probe','meter_bus','meter_init','meter_convert','sdk_meter','sdk_energy','sdk_memory','sdk_relay','sdk_sse','sfn_voltage_guard','sfn_child_lock','sfn_backend','sfn_up_protocol','sfn_up_client'):
   sources.append(ROOT/'standalone/firmware'/(name+'.c'))
  sources.append(ROOT/'standalone/firmware/wifi_form.c')
  sources.append(ROOT/'standalone/firmware/sdk_http_io.c')

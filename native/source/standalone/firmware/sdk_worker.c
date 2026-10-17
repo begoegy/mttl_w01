@@ -12,6 +12,8 @@
 #include "sdk_mqtt_socket.h"
 #else
 #include "sdk_up_socket.h"
+#include "sfn_backend.h"
+#include "sfn_native_build_config.h"
 #endif
 #include "sdk_settings_flash.h"
 #include "sdk_ntp.h"
@@ -278,6 +280,9 @@ static int web(void *p){(void)p;return mttl_sdk_web_start();}
 static int commit(void *p,const char *s,const char *key){unsigned i;mttl_settings candidate=device.settings;int changed;(void)p;
  changed=strcmp(candidate.ssid,s)||strcmp(candidate.wifi_password,key);
  memcpy(candidate.ssid,s,33);memcpy(candidate.wifi_password,key,65);
+#ifdef SFN_NATIVE_UP_ONLY
+ changed=sfn_backend_pin(&candidate,SFN_NATIVE_BACKEND_IPV4,SFN_NATIVE_BACKEND_PORT)||changed;
+#endif
  if(changed||!device.persistent){int saved;if(!storage_begin()){wipe((char *)&candidate,sizeof(candidate));return 0;}saved=mttl_sdk_settings_save(&candidate);storage_end();if(saved!=1){wipe((char *)&candidate,sizeof(candidate));return 0;}}
  taskENTER_CRITICAL();device.settings=candidate;device.persistent=1;taskEXIT_CRITICAL();manual_setup=0;wipe((char *)&candidate,sizeof(candidate));
  (void)i;return 1;}

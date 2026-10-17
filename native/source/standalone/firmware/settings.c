@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "sfn_backend.h"
 static size_t length(const char *s,size_t cap){size_t i;for(i=0;i<cap&&s[i];i++){}return i;}
 static int utf8(const char *s,size_t cap,int required){
     size_t n=length(s,cap),i=0;uint32_t v,min;unsigned extra,j;
@@ -34,7 +35,7 @@ void mttl_settings_default(mttl_settings *s){
 }
 int mttl_settings_valid(const mttl_settings *s){
     size_t i,n,k;if(!s||s->language>1||s->mqtt_enabled>1||!s->port||!s->sfn_backend_port||s->energy_valid>15||!mttl_protection_valid(&s->protection)||!mttl_schedule_valid(&s->schedule)||!sfn_voltage_guard_valid(&s->voltage_guard)||!sfn_child_lock_valid(s->child_lock_mask))return 0;
-    if(s->sfn_backend_ipv4){unsigned first=s->sfn_backend_ipv4>>24;if(!first||first==127||first>=224||s->sfn_backend_ipv4==0xffffffffu)return 0;}
+    if(!sfn_backend_valid(s->sfn_backend_ipv4,s->sfn_backend_port))return 0;
     for(i=0;i<4;i++)if(s->energy_raw[i]>0xffffffu||s->energy_wh[i]>0x7fffffffu)return 0;
     if(!utf8(s->device,65,1))return 0;for(i=0;i<4;i++)if(!utf8(s->channel[i],65,1))return 0;
     /* SSID is an opaque byte string; scan roundtrip need not be valid UTF-8. */
