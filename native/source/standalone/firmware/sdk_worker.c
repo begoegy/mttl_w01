@@ -254,6 +254,12 @@ static size_t sfn_up_handle(void *context,const sfn_up_command *command,char *ou
    taskENTER_CRITICAL();d->settings=candidate;++d->revision;schedule_state.primed=0;schedule_state.pending=0;taskEXIT_CRITICAL();return sfn_up_encode_schedule_commit_ack(out,cap,meta.generation,meta.count);}
   case SFN_UP_CMD_OTA:return sfn_sdk_remote_ota_request(d->settings.sfn_backend_ipv4,command->ota_sequence,command->ota_bytes,command->ota_sha256)?sfn_up_encode_ota_ack(out,cap):0;
   case SFN_UP_CMD_SCHEDULE_STATUS:{uint64_t current;int clock_valid=mttl_time_now(&d->ntp.time,now,&current);(void)current;return sfn_up_encode_schedule_status(out,cap,d->settings.sfn_schedule.generation,d->settings.sfn_schedule.count,clock_valid,d->settings.sfn_schedule.valid);}
+  case SFN_UP_CMD_GUARD_STATUS:
+#ifdef SFN_BOOT_GUARD
+   return sfn_up_encode_guard_status(out,cap,sfn_sdk_boot_guard_available(),sfn_sdk_boot_guard_trusted());
+#else
+   return sfn_up_encode_guard_status(out,cap,0,0);
+#endif
   default:return 0;
  }
 }

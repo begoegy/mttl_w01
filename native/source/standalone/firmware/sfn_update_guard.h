@@ -9,6 +9,7 @@ typedef struct {
 enum {SFN_UPDATE_GUARD_NONE=0,SFN_UPDATE_GUARD_ARMED=1,SFN_UPDATE_GUARD_TRUSTED=2,SFN_UPDATE_GUARD_ROLLBACK_READY=3,SFN_UPDATE_GUARD_FAILED=-1};
 int sfn_update_guard_locate_current(const sfn_boot_guard_descriptor *,const sfn_boot_guard_io *,uint32_t *current_slot);
 int sfn_update_guard_prepare(const sfn_boot_guard_descriptor *,const sfn_boot_guard_io *,uint32_t previous_slot,uint32_t candidate_slot);
+int sfn_update_guard_adopt_first_flash(const sfn_boot_guard_descriptor *,const sfn_boot_guard_io *,uint32_t candidate_slot);
 int sfn_update_guard_start(sfn_update_guard_state *,const sfn_boot_guard_descriptor *,const sfn_boot_guard_io *,uint32_t current_slot,uint32_t now_ms);
 int sfn_update_guard_mark_trusted(sfn_update_guard_state *,const sfn_boot_guard_descriptor *,const sfn_boot_guard_io *);
 int sfn_update_guard_should_timeout(const sfn_update_guard_state *,uint32_t now_ms,uint32_t timeout_ms);

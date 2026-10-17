@@ -17,6 +17,7 @@ typedef enum {
     SFN_UP_CMD_SCHEDULE_ITEM,
     SFN_UP_CMD_SCHEDULE_COMMIT,
     SFN_UP_CMD_SCHEDULE_STATUS,
+    SFN_UP_CMD_GUARD_STATUS,
     SFN_UP_CMD_OTA
 } sfn_up_command_type;
 
@@ -56,6 +57,7 @@ size_t sfn_up_encode_vguard_ack(char *out,size_t cap,uint32_t revision);
 size_t sfn_up_encode_clock_ack(char *out,size_t cap,uint32_t epoch);
 size_t sfn_up_encode_schedule_commit_ack(char *out,size_t cap,uint32_t generation,unsigned count);
 size_t sfn_up_encode_schedule_status(char *out,size_t cap,uint32_t generation,unsigned count,int clock_valid,int storage_valid);
+size_t sfn_up_encode_guard_status(char *out,size_t cap,int available,int trusted);
 size_t sfn_up_encode_ota_ack(char *out,size_t cap);
 size_t sfn_up_encode_getinfo(char *out,size_t cap,const sfn_up_outlet outlets[4]);
 #endif

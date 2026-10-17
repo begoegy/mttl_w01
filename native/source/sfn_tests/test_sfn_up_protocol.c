@@ -11,6 +11,7 @@ int main(void){
  assert(sfn_up_parse_command("up:query:wifirssi",18,&c)&&c.type==SFN_UP_CMD_RSSI);
  assert(sfn_up_parse_command("up:childlock",12,&c)&&c.type==SFN_UP_CMD_CHILDLOCK_GET);
  assert(sfn_up_parse_command("up:childlock:31",15,&c)&&c.type==SFN_UP_CMD_CHILDLOCK_SET&&c.mask==31);
+ assert(sfn_up_parse_command("up:sfn:96",9,&c)&&c.type==SFN_UP_CMD_GUARD_STATUS);
  assert(!sfn_up_parse_command("up:childlock:32",15,&c));assert(!sfn_up_parse_command("up:onoff:0:on",13,&c));assert(!sfn_up_parse_command("up:onoff:9:on",13,&c));assert(!sfn_up_parse_command("up:query:wifirssi\r\nup:onoff:1:on",32,&c));
  {const char *ota="up:ota:20016:321456:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
   assert(sfn_up_parse_command(ota,strlen(ota),&c)&&c.type==SFN_UP_CMD_OTA&&c.ota_sequence==20016u&&c.ota_bytes==321456u&&c.ota_sha256[0]==0&&c.ota_sha256[31]==31);
@@ -23,6 +24,9 @@ int main(void){
  assert(sfn_up_encode_voltage(b,sizeof(b),1,224500)&&!strcmp(b,"up:power_report:1:224500\r\n"));
  assert(sfn_up_encode_rssi(b,sizeof(b),-61)&&!strcmp(b,"up:query:-61\r\n"));
  assert(sfn_up_encode_childlock(b,sizeof(b),31)&&!strcmp(b,"up:cl:31\r\n"));
+ assert(sfn_up_encode_guard_status(b,sizeof(b),1,0)&&!strcmp(b,"up:sfn:96:1:0\r\n"));
+ assert(sfn_up_encode_guard_status(b,sizeof(b),1,1)&&!strcmp(b,"up:sfn:96:1:1\r\n"));
+ assert(!sfn_up_encode_guard_status(b,sizeof(b),0,1));
  n=sfn_up_encode_getinfo(b,sizeof(b),o);assert(n);assert(strstr(b,"1:111;off;0;0;0;0;0000000A;")!=0);assert(strstr(b,"2:222;on;1;0;0;5300;0000000A;")!=0);assert(strstr(b,"4:444;on;1;0;0;1200000;000003E8;")!=0);assert(strstr(b,"5:0;on;0;0;0;1205300;00000406;")!=0);assert(n>=2&&b[n-2]=='\r'&&b[n-1]=='\n');
  puts("SFN_UP_PROTOCOL_TESTS=PASS");return 0;
 }
