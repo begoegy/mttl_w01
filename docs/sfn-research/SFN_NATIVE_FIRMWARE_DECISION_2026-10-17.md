@@ -58,3 +58,24 @@ Provision the pinned Ameba-1 SDK/compiler on `vmi3653994` only, build twice, req
 
 ## Phase 4 — physical gate
 No physical candidate until a recovery path is proven first. New2 remains reference-only. A dedicated sacrificial device is the preferred first native canary.
+
+## Phase 2A — UP wire codec result
+Status: **HOST PASS / NO SOCKET TRANSPORT / NO OTA / NO DEVICE WRITE**.
+
+Implemented clean-room, from SFN Power's own wire contract:
+- strict server-command parser for GetInfo, outlet ON/OFF, voltage query, RSSI query, Child Lock read/set;
+- BootInfo encoder;
+- complete four-outlet + aggregate GetInfo encoder;
+- ON/OFF ACK, physical event, voltage, RSSI and `up:cl:<mask>` encoders;
+- deliberately no `up:ota` command handling yet.
+
+Security/robustness:
+- max bounded input line;
+- non-printable command bytes rejected except permitted line/padding terminators;
+- glued second command after CRLF is rejected instead of silently accepting the first command;
+- invalid outlet and Child Lock ranges rejected.
+
+Verification:
+- `SFN_UP_PROTOCOL_TESTS=PASS` under host GCC with `-Wall -Wextra -Werror -pedantic`;
+- C-generated BootInfo/GetInfo/Voltage/RSSI/ACK/Event frames parsed by the current production SFN Python protocol parser: `SFN_PRODUCTION_PARSER_CROSSCHECK=PASS`;
+- Child Lock response parsed by current child-lock server branch: `SFN_CHILDLOCK_PARSER_CROSSCHECK=PASS`.
