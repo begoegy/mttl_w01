@@ -4,4 +4,6 @@
 int sfn_sdk_boot_guard_start(uint32_t now_ms);
 void sfn_sdk_boot_guard_tick(uint32_t now_ms,int sfn_online);
 int sfn_sdk_boot_guard_available(void);
+int sfn_sdk_boot_guard_trusted(void);
+int sfn_sdk_boot_guard_prepare_update(uint32_t active_slot);
 #endif

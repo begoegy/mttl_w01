@@ -6,6 +6,9 @@
 #include "ui_assets.h"
 #include "sdk_sse.h"
 #include "sdk_relay.h"
+#ifdef SFN_NATIVE_UP_ONLY
+#include "sfn_native_build_config.h"
+#endif
 #ifdef MTTL_OTA_TEST
 #include "ota_test_config.h"
 #include "sdk_ota_runtime.h"
@@ -21,7 +24,11 @@ static void ota_redirect(struct httpd_conn *c){
  httpd_conn_close(c);
 }
 extern int mttl_httpd_stopped(void);
+#ifdef SFN_NATIVE_UP_ONLY
+static const char version[]="{\"version\":\"" SFN_NATIVE_VERSION "\"}";
+#else
 static const char version[]="{\"version\":\"2.0.14\"}";
+#endif
 static void response(struct httpd_conn *connection,const char *body,size_t length,char *type){
     if(httpd_response_write_header_start(connection,"200 OK",type,length)<0 ||
        httpd_response_write_header(connection,"Cache-Control","no-store")<0 ||
@@ -203,10 +210,17 @@ int mttl_sdk_web_start(void){
 #ifdef MTTL_OTA_TEST
     if(httpd_reg_page_callback("/ota",ota_redirect)<0||httpd_reg_page_callback("/api/firmware/status",ota_status)<0||httpd_reg_page_callback("/api/firmware/upload",ota_upload)<0){httpd_clear_page_callbacks();return 0;}
 #endif
+#ifdef SFN_NATIVE_UP_ONLY
+    /* Native product control lives on the SFN server/app. The local HTTP
+     * surface is deliberately only first-run/recovery Wi-Fi provisioning. */
+    for(i=0;i<sizeof(mttl_assets)/sizeof(mttl_assets[0]);i++)if(httpd_reg_page_callback((char *)mttl_assets[i].path,asset)<0){httpd_clear_page_callbacks();return 0;}
+    if(httpd_reg_page_callback("/api/wifi",configure)<0){httpd_clear_page_callbacks();return 0;}
+#else
     if(httpd_reg_page_callback("/api/control",control_page)<0){httpd_clear_page_callbacks();return 0;}
     if(httpd_reg_page_callback("/api/events",mttl_sdk_sse_open)<0){httpd_clear_page_callbacks();return 0;}
     for(i=0;i<sizeof(mttl_assets)/sizeof(mttl_assets[0]);i++)if(httpd_reg_page_callback((char *)mttl_assets[i].path,asset)<0){httpd_clear_page_callbacks();return 0;}
     if(httpd_reg_page_callback("/api/device",device_page)<0 || httpd_reg_page_callback("/api/config",config_page)<0 || httpd_reg_page_callback("/api/version",info)<0 || httpd_reg_page_callback("/api/wifi",configure)<0 || httpd_reg_page_callback("/api/status",status_page)<0 || httpd_reg_page_callback("/api/scan",scan_page)<0 || httpd_reg_page_callback("/api/memory",memory_page)<0 || httpd_reg_page_callback("/api/energy",energy_page)<0){httpd_clear_page_callbacks();return 0;}
+#endif
     if(httpd_start(80,2,4096,HTTPD_THREAD_SINGLE,HTTPD_SECURE_NONE)<0){httpd_clear_page_callbacks();return 0;}
     started=1;return 1;
 }

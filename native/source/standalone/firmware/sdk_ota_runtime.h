@@ -4,7 +4,7 @@
 #include <stdint.h>
 /* Single HTTP owner. Only decoded Image2 BIN; no bootloader/factory writes. */
 uint32_t mttl_sdk_ota_probe(void);
-int mttl_sdk_ota_begin(uint32_t,const uint8_t [32]);
+int mttl_sdk_ota_begin(uint32_t sequence,uint32_t bytes,const uint8_t sha256[32]);
 int mttl_sdk_ota_feed(const uint8_t *,size_t);
 int mttl_sdk_ota_finish(void);
 int mttl_sdk_ota_restore_version(void);

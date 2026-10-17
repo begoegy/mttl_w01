@@ -1,19 +1,30 @@
-#ifdef MTTL_OTA_TEST
+#if defined(MTTL_OTA_TEST) || defined(MTTL_NATIVE_OTA)
 #include "sdk_ota_runtime.h"
 #include "ota_identity.h"
 #include "ota_session.h"
 #include "sdk_ota_flash.h"
 #include "flash_api.h"
 #include "device_lock.h"
+#ifdef MTTL_OTA_TEST
 #include "ota_test_config.h"
+#else
+#include "sfn_native_ota_config.h"
+#include "sdk_boot_guard.h"
+#include "sfn_ota_policy.h"
+#endif
 #include <string.h>
+#ifdef MTTL_OTA_TEST
 flash_t flash;
+#else
+extern flash_t flash;
+#endif
 extern unsigned char __ram_image2_text_start__[],__data_start__[];
 static const mttl_ota_layout layout={0xb000,0x80000,0xee000,0x100000};
 static mttl_ota_session session;
 static mttl_sdk_ota_flash adapter;
 static uint32_t active;
 static uint8_t authorized;
+static uint32_t target_sequence;
 static uint8_t restored_version;
 /* Identify the supported OEM Image2 family, not an exact file digest.
  * These fixed-layout model/version strings survive our IP-dependent patch.
@@ -79,7 +90,7 @@ static int admit(void *p,const mttl_ota_layout *l,uint32_t a,const mttl_ota_plan
 static int read_io(void *p,uint32_t a,uint8_t *b,size_t n){return mttl_sdk_ota_flash_read(p,a,b,n);}
 static int write_io(void *p,uint32_t a,const uint8_t *b,size_t n){return mttl_sdk_ota_flash_write(p,a,b,n);}
 static int erase_io(void *p,uint32_t a){return mttl_sdk_ota_flash_erase(p,a);}
-void mttl_sdk_ota_abort(void){mttl_ota_session_abort(&session);authorized=0;adapter.verified=0;active=0;restored_version=0;}
+void mttl_sdk_ota_abort(void){mttl_ota_session_abort(&session);authorized=0;adapter.verified=0;active=0;target_sequence=0;restored_version=0;}
 static int same_image(uint32_t bytes,const uint8_t expected[32]){
  uint32_t body,pos=0;mttl_ota_hash hash;uint8_t chunk[256],digest[32];
  if(!raw_read(0,active,(uint8_t *)&body,4))return -1;
@@ -92,9 +103,14 @@ static int same_image(uint32_t bytes,const uint8_t expected[32]){
  }
  return !mttl_ota_hash_finish(&hash,digest)?-1:!memcmp(digest,expected,32);
 }
-int mttl_sdk_ota_begin(uint32_t bytes,const uint8_t sha[32]){
+int mttl_sdk_ota_begin(uint32_t sequence,uint32_t bytes,const uint8_t sha[32]){
  mttl_ota_stage_io io={&adapter,erase_io,write_io,read_io};
  mttl_sdk_ota_abort();active=mttl_sdk_ota_probe();if(!active||!sha||same_image(bytes,sha)!=0){mttl_sdk_ota_abort();return 0;}
+#ifdef MTTL_NATIVE_OTA
+ if(!sfn_ota_sequence_allowed(SFN_NATIVE_OTA_SEQUENCE,sequence)||!sfn_sdk_boot_guard_prepare_update(active)){mttl_sdk_ota_abort();return 0;}target_sequence=sequence;
+#else
+ (void)sequence;
+#endif
  mttl_sdk_ota_flash_init(&adapter);authorized=1;
  if(!mttl_ota_session_init(&session,&layout,active,bytes,sha,&io,admit,0)){mttl_sdk_ota_abort();return 0;}return 1;
 }
@@ -109,19 +125,22 @@ static int commit_word(uint32_t address,uint32_t value,uint32_t *after){
  device_mutex_unlock(RT_DEV_LOCK_FLASH);return ok;
 }
 static int ota_profile_present(void){
- static const char marker[]="NETWORK_OTA_TEST_RAM_SETTINGS_";
- uint8_t window[256+sizeof(marker)];size_t keep=0;uint32_t pos=16;
- while(pos<session.bytes-4){size_t n=session.bytes-4-pos,i,total;if(n>256)n=256;
-  if(!mttl_sdk_ota_flash_read(&adapter,session.stage.plan.target+pos,window+keep,n))return 0;
-  total=keep+n;for(i=0;i+sizeof(marker)-1<=total;i++)if(!memcmp(window+i,marker,sizeof(marker)-1))return 1;
-  keep=total<sizeof(marker)-2?total:sizeof(marker)-2;memmove(window,window+total-keep,keep);pos+=(uint32_t)n;
- }
+#ifdef MTTL_NATIVE_OTA
+ char marker[64];int marker_size=(int)sfn_ota_profile_marker(marker,sizeof(marker),target_sequence);
+#else
+ static const char marker[]="NETWORK_OTA_TEST_RAM_SETTINGS_";int marker_size=(int)(sizeof(marker)-1);
+#endif
+ uint8_t window[320];size_t keep=0;uint32_t pos=16;if(marker_size<=0||(size_t)marker_size>=sizeof(window))return 0;
+ while(pos<session.bytes-4){size_t n=session.bytes-4-pos,i,total;if(n>256)n=256;if(!mttl_sdk_ota_flash_read(&adapter,session.stage.plan.target+pos,window+keep,n))return 0;total=keep+n;for(i=0;i+(size_t)marker_size<=total;i++)if(!memcmp(window+i,marker,(size_t)marker_size))return 1;keep=total<(size_t)marker_size-1?total:(size_t)marker_size-1;memmove(window,window+total-keep,keep);pos+=(uint32_t)n;}
  return 0;
 }
 int mttl_sdk_ota_finish(void){
  mttl_ota_commit commit;uint32_t a,v,r;int legacy;
  if(!authorized||!mttl_ota_session_finish(&session)){mttl_sdk_ota_abort();return 0;}
  legacy=legacy_image();
+#ifdef MTTL_NATIVE_OTA
+ if(legacy){mttl_sdk_ota_abort();return 0;}
+#endif
  if(same_image(session.bytes,session.stage.expected)!=0||(!legacy&&!ota_profile_present())||mttl_sdk_ota_probe()!=active||
     !mttl_ota_commit_init(&commit,&layout,active,session.stage.plan.target,1)){mttl_sdk_ota_abort();return 0;}
  while(mttl_ota_commit_action(&commit,&a,&v)){int ok;r=0;ok=commit_word(a,v,&r);if(!mttl_ota_commit_ack(&commit,ok,r)){mttl_sdk_ota_abort();return 0;}}

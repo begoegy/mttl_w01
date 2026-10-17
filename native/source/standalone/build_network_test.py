@@ -7,14 +7,24 @@ from standalone.image2_analysis import initialized_body,package_body
 from standalone.ota import inspect_image
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');parser.add_argument('--sensor-test',action='store_true');parser.add_argument('--relay-test',action='store_true');parser.add_argument('--no-watchdog',action='store_true');parser.add_argument('--legacy-relay-timing',action='store_true');parser.add_argument('--sfn-native',action='store_true');parser.add_argument('--sfn-boot-guard',action='store_true');parser.add_argument('--sfn-rescue-fwr',default='');parser.add_argument('--sfn-rescue-sha256',default='');parser.add_argument('--sfn-backend-ip',default='');parser.add_argument('--sfn-backend-port',type=int,default=10086);options=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--ota-test',action='store_true');parser.add_argument('--sensor-test',action='store_true');parser.add_argument('--relay-test',action='store_true');parser.add_argument('--no-watchdog',action='store_true');parser.add_argument('--legacy-relay-timing',action='store_true');parser.add_argument('--sfn-native',action='store_true');parser.add_argument('--sfn-boot-guard',action='store_true');parser.add_argument('--sfn-rescue-fwr',default='');parser.add_argument('--sfn-rescue-sha256',default='');parser.add_argument('--sfn-backend-ip',default='');parser.add_argument('--sfn-backend-port',type=int,default=10086);parser.add_argument('--sfn-version',default='');parser.add_argument('--sfn-ota-sequence',type=int,default=0);parser.add_argument('--sfn-ota-public-key',default='');options=parser.parse_args()
     if (options.no_watchdog or options.legacy_relay_timing) and not options.ota_test:parser.error('comparison flags require ota-test')
     if options.sensor_test and not (options.ota_test or options.sfn_native):parser.error('sensor-test requires ota-test or sfn-native')
     if options.relay_test and not options.sensor_test:parser.error('relay-test requires sensor-test')
     if options.sfn_boot_guard and (not options.sfn_native or not options.sfn_rescue_fwr or not options.sfn_rescue_sha256):parser.error('sfn-boot-guard requires sfn-native plus rescue FWR and SHA256')
+    if options.sfn_native and (not options.sfn_version or not options.sfn_ota_public_key or not 1<=options.sfn_ota_sequence<=0xffffffff):parser.error('sfn-native requires version, OTA sequence and public key')
     ota=options.ota_test
     out=ROOT/('standalone/results/network-ota-test' if ota else 'standalone/results/network-test')
     out.mkdir(parents=True,exist_ok=True)
+    if options.sfn_native:
+        sdk=out/'sdk';sdk.mkdir(parents=True,exist_ok=True)
+        native_identity=json.loads((ROOT/'boot_identity.json').read_text())
+        native_boot_size=native_identity['boot_size']
+        native_boot_sha=bytes.fromhex(native_identity['boot_sha256'])
+        assert 0<native_boot_size<0x9000-32 and len(native_boot_sha)==32
+        (sdk/'sfn_native_ota_config.h').write_text('#define MTTL_OTA_BOOT_BYTES '+str(native_boot_size)+'\n#define MTTL_OTA_BOOT_SHA {'+','.join(map(str,native_boot_sha))+'}\n#define SFN_NATIVE_OTA_SEQUENCE '+str(options.sfn_ota_sequence)+'u\n#define SFN_NATIVE_OTA_SEQUENCE_TEXT "'+str(options.sfn_ota_sequence)+'"\n',encoding='utf-8')
+        key_output=subprocess.check_output([sys.executable,str(ROOT/'standalone/generate_sfn_ota_public_key.py'),'--public-key',options.sfn_ota_public_key,'--out',str(sdk/'sfn_ota_public_key.h')],cwd=ROOT,text=True)
+        ota_public_key_sha256=next(line.split('=',1)[1].strip() for line in key_output.splitlines() if line.startswith('SFN_OTA_PUBLIC_KEY_SHA256='))
     if ota:
         sdk=out/'sdk';sdk.mkdir(parents=True,exist_ok=True)
         build_id=secrets.token_hex(8)
@@ -30,7 +40,7 @@ def main():
     if options.sfn_boot_guard:
         guard_sdk=out/'sdk';guard_sdk.mkdir(parents=True,exist_ok=True)
         subprocess.run([sys.executable,str(ROOT/'standalone/generate_sfn_rescue.py'),'--fwr',options.sfn_rescue_fwr,'--sha256',options.sfn_rescue_sha256,'--out',str(guard_sdk/'sfn_rescue_image.h')],cwd=ROOT,check=True)
-    subprocess.run([sys.executable,str(ROOT/'analysis/build_minimal_network.py'),'--standalone','--network-test',*(['--ota-test'] if ota else []),*(['--sensor-test'] if options.sensor_test else []),*(['--relay-test'] if options.relay_test else []),*(['--sfn-native','--sfn-backend-ip',options.sfn_backend_ip,'--sfn-backend-port',str(options.sfn_backend_port)] if options.sfn_native else []),*(['--sfn-boot-guard'] if options.sfn_boot_guard else [])],cwd=ROOT,check=True)
+    subprocess.run([sys.executable,str(ROOT/'analysis/build_minimal_network.py'),'--standalone','--network-test',*(['--ota-test'] if ota else []),*(['--sensor-test'] if options.sensor_test else []),*(['--relay-test'] if options.relay_test else []),*(['--sfn-native','--sfn-backend-ip',options.sfn_backend_ip,'--sfn-backend-port',str(options.sfn_backend_port),'--sfn-version',options.sfn_version,'--sfn-ota-sequence',str(options.sfn_ota_sequence)] if options.sfn_native else []),*(['--sfn-boot-guard'] if options.sfn_boot_guard else [])],cwd=ROOT,check=True)
     sdk=out/'sdk';elf=sdk/'offline-only.axf'
     tool=Path(os.environ['MTTL_GCC_DIR'])/'bin'
     def gcc_tool(name):
@@ -44,8 +54,9 @@ def main():
     assert syms['__HeapLimit']<=syms['__mttl_msp_limit']
     assert syms['__mttl_msp_top']-syms['__mttl_msp_limit']==4096
     body,sections=initialized_body(elf.read_bytes())
-    assert (b'NETWORK_OTA_TEST_RAM_SETTINGS_' if ota else b'NETWORK_TEST_NO_OTA_RAM_SETTINGS\0') in body
-    assert '2.0.14' in inspect_image(package_body(body)[0]).version_candidates
+    expected_profile=b'NETWORK_OTA_TEST_RAM_SETTINGS_' if ota else ((b'SFN_NATIVE_REMOTE_OTA_SAFE;SEQ='+str(options.sfn_ota_sequence).encode('ascii')+b'\0') if options.sfn_native else b'NETWORK_TEST_NO_OTA_RAM_SETTINGS\0')
+    assert expected_profile in body
+    assert options.sfn_version in inspect_image(package_body(body)[0]).version_candidates if options.sfn_native else True
     # Inspect actual setup machine code: a direct BL must start the worker.
     import re
     dis=run('arm-none-eabi-objdump','-d',elf)
@@ -79,13 +90,17 @@ def main():
     raw,fwr=package_body(body)
     assert raw[0x28:0x48]==b'LGU+-TAP-HW002'.ljust(32,b'\0')
     assert syms['mttl_native_ota_hardware']==0x10006018
+    if options.sfn_boot_guard:
+        marker=('SFN-NATIVE-GUARD-'+options.sfn_version+'-A1').encode('ascii')
+        expected_marker_offset=syms['sfn_native_guard_marker']-syms['__ram_image2_text_start__']+16
+        assert raw.find(marker)==expected_marker_offset
     files=[]
     for ext,data in (('bin',raw),('fwr',fwr)):
-        path=out/(('mttl-w01-2.0.14-network-OTA-test.' if ota else 'mttl-w01-2.0.14-network-test-NO-OTA.')+ext)
+        name_version=options.sfn_version if options.sfn_native else '2.0.14'; path=out/(('mttl-w01-'+name_version+'-network-OTA-test.' if ota else ('mttl-w01-'+name_version+'-native-remote-OTA.' if options.sfn_native else 'mttl-w01-'+name_version+'-network-test-NO-OTA.'))+ext)
         path.write_bytes(data)
         assert inspect_image(path.read_bytes()).decoded==raw
         files.append({'path':str(path),'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
-    report={'version':'2.0.14','profile':'NETWORK_OTA_TEST_RAM_SETTINGS' if ota else 'NETWORK_TEST_NO_OTA_RAM_SETTINGS',
+    report={'version':options.sfn_version if options.sfn_native else '2.0.14','profile':'NETWORK_OTA_TEST_RAM_SETTINGS' if ota else (('SFN_NATIVE_REMOTE_OTA_SAFE;SEQ='+str(options.sfn_ota_sequence)) if options.sfn_native else 'NETWORK_TEST_NO_OTA_RAM_SETTINGS'),
             'elf_sha256':hashlib.sha256(elf.read_bytes()).hexdigest(),'files':files,
             'network_start_verified_in_setup_machine_code':True,
             'setup_arm_mock_success_failure_cases':2,
@@ -95,12 +110,12 @@ def main():
             'link_warning_count':sum(': warning:' in line for line in (sdk/'build.log').read_text().splitlines()),
             'boot_signature':'FFFFFFFFFFFFFFFF','device_written':False,
             'target_boot_verified':False,'validation_profile':'Portable format/roundtrip and setup emulator; original decoder fixture not included','production_ready':False,
-            'relay_enabled':options.relay_test,'settings_persistent':True,'ota_write_enabled':ota,
+            'relay_enabled':options.relay_test,'settings_persistent':True,'ota_write_enabled':bool(ota or options.sfn_native),
             'settings_flash_enabled':True,'settings_sectors':['0xee000','0xef000'],
             'initial_rtos_heap_bytes':((39 if options.sensor_test else 48)*1024 if (ota or options.sfn_native) else 100*1024),
             'sensor_gpio_enabled':options.sensor_test,
-            'ota_runtime_validated':False,
-            'warning':'Experimental bring-up candidate, not target-boot validated. Recovery debugger required. No direct full-flash writing; no bootloader/factory replacement.'}
+            'ota_runtime_validated':False,'ota_core_actual_artifact_model_validated':bool(options.sfn_native),'native_remote_ota_enabled':bool(options.sfn_native),
+            'warning':'Remote OTA candidate is lab/model validated only; target boot and physical remote update are not yet proven. No bootloader/factory replacement.'}
     report['build_id']=build_id if ota else None
     report['watchdog_enabled']=not options.no_watchdog
     report['legacy_relay_timing']=options.legacy_relay_timing
@@ -111,9 +126,13 @@ def main():
     report['sfn_boot_guard_timeout_seconds']=900 if options.sfn_boot_guard else None
     report['sfn_boot_guard_trust_seconds']=60 if options.sfn_boot_guard else None
     report['sfn_rescue_fwr_sha256']=options.sfn_rescue_sha256.lower() if options.sfn_boot_guard else None
+    report['sfn_ota_signature_required']=bool(options.sfn_native)
+    report['sfn_ota_public_key_sha256']=ota_public_key_sha256 if options.sfn_native else None
+    report['sfn_ota_sequence']=options.sfn_ota_sequence if options.sfn_native else None
+    report['sfn_ota_host_policy']='configured-backend-no-wire-host+signed-release' if options.sfn_native else None
     (out/'manifest.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     if ota:
         import shutil
-        shutil.copyfile(out/'mttl-w01-2.0.14-network-OTA-test.fwr',out/('comMTTL-W01_2.0.14-build-'+build_id+'.fwr'))
+        shutil.copyfile(out/'mttl-w01-2.0.15-network-OTA-test.fwr',out/('comMTTL-W01_2.0.15-build-'+build_id+'.fwr'))
     print(json.dumps(report,indent=2))
 if __name__=='__main__':main()

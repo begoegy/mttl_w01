@@ -16,7 +16,8 @@ typedef enum {
     SFN_UP_CMD_SCHEDULE_BEGIN,
     SFN_UP_CMD_SCHEDULE_ITEM,
     SFN_UP_CMD_SCHEDULE_COMMIT,
-    SFN_UP_CMD_SCHEDULE_STATUS
+    SFN_UP_CMD_SCHEDULE_STATUS,
+    SFN_UP_CMD_OTA
 } sfn_up_command_type;
 
 typedef struct {
@@ -25,10 +26,11 @@ typedef struct {
     uint8_t on;
     uint8_t mask;
     uint32_t revision,flags,thresholds,timing,recovery_seconds;
-    uint32_t epoch,transition1_epoch,transition2_epoch,generation;
+    uint32_t epoch,transition1_epoch,transition2_epoch,generation,ota_sequence,ota_bytes;
     int16_t offset_minutes,transition1_offset_minutes,transition2_offset_minutes;
     uint16_t date_days,minute;
     uint8_t count,slot,outlet,repeat,days;
+    uint8_t ota_sha256[32];
 } sfn_up_command;
 
 typedef struct {
@@ -54,5 +56,6 @@ size_t sfn_up_encode_vguard_ack(char *out,size_t cap,uint32_t revision);
 size_t sfn_up_encode_clock_ack(char *out,size_t cap,uint32_t epoch);
 size_t sfn_up_encode_schedule_commit_ack(char *out,size_t cap,uint32_t generation,unsigned count);
 size_t sfn_up_encode_schedule_status(char *out,size_t cap,uint32_t generation,unsigned count,int clock_valid,int storage_valid);
+size_t sfn_up_encode_ota_ack(char *out,size_t cap);
 size_t sfn_up_encode_getinfo(char *out,size_t cap,const sfn_up_outlet outlets[4]);
 #endif

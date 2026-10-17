@@ -12,6 +12,8 @@ parser.add_argument('--sfn-native',action='store_true',help='Build SFN UP-only p
 parser.add_argument('--sfn-boot-guard',action='store_true',help='Include exact-rescue first-boot rollback guard; SFN native only')
 parser.add_argument('--sfn-backend-ip',default='',help='Pinned SFN backend IPv4; required for --sfn-native')
 parser.add_argument('--sfn-backend-port',type=int,default=10086)
+parser.add_argument('--sfn-version',default='')
+parser.add_argument('--sfn-ota-sequence',type=int,default=0)
 args=parser.parse_args()
 if args.ota_test and not args.network_test: parser.error('ota-test requires network-test')
 if args.sensor_test and not (args.ota_test or args.sfn_native): parser.error('sensor-test requires ota-test or sfn-native')
@@ -24,6 +26,8 @@ if args.sfn_native:
  except ipaddress.AddressValueError: parser.error('--sfn-native requires a valid --sfn-backend-ip')
  if sfn_ip.is_unspecified or sfn_ip.is_loopback or sfn_ip.is_multicast or int(sfn_ip)==0xffffffff: parser.error('unsafe --sfn-backend-ip')
  if not 1<=args.sfn_backend_port<=65535: parser.error('invalid --sfn-backend-port')
+ if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',args.sfn_version or ''): parser.error('--sfn-version must be x.y.z')
+ if not 1<=args.sfn_ota_sequence<=0xffffffff: parser.error('--sfn-ota-sequence must be positive')
 else:
  sfn_ip=None
 ROOT=Path(__file__).resolve().parents[1]
@@ -56,8 +60,10 @@ if args.ota_test: common += ['-DMTTL_OTA_TEST=1']
 if args.sensor_test: common += ['-DMTTL_SENSOR_TEST=1']
 if args.relay_test: common += ['-DMTTL_RELAY_TEST=1']
 if args.sfn_native:
- (out/'sfn_native_build_config.h').write_text('#ifndef SFN_NATIVE_BUILD_CONFIG_H\n#define SFN_NATIVE_BUILD_CONFIG_H\n#define SFN_NATIVE_BACKEND_IPV4 0x%08Xu\n#define SFN_NATIVE_BACKEND_PORT %du\n#endif\n' % (int(sfn_ip),args.sfn_backend_port),encoding='ascii')
- common += ['-DSFN_NATIVE_UP_ONLY=1']
+ guard_marker='SFN-NATIVE-GUARD-'+args.sfn_version+'-A1'
+ if len(guard_marker)>=32: parser.error('guard marker too long')
+ (out/'sfn_native_build_config.h').write_text('#ifndef SFN_NATIVE_BUILD_CONFIG_H\n#define SFN_NATIVE_BUILD_CONFIG_H\n#define SFN_NATIVE_BACKEND_IPV4 0x%08Xu\n#define SFN_NATIVE_BACKEND_PORT %du\n#define SFN_NATIVE_VERSION \"%s\"\n#define SFN_NATIVE_OTA_SEQUENCE %du\n#define SFN_NATIVE_OTA_SEQUENCE_TEXT \"%d\"\n#define SFN_NATIVE_GUARD_MARKER \"%s\"\n#endif\n' % (int(sfn_ip),args.sfn_backend_port,args.sfn_version,args.sfn_ota_sequence,args.sfn_ota_sequence,guard_marker),encoding='ascii')
+ common += ['-DSFN_NATIVE_UP_ONLY=1','-DMTTL_NATIVE_OTA=1']
  if args.sfn_boot_guard: common += ['-DSFN_BOOT_GUARD=1']
 sources=[ROOT/'analysis/minimal_network_link.cpp',ROOT/'analysis/bounded_sbrk.c',ROOT/'analysis/http_only_adapter.c',ROOT/'analysis/newlib_scheduler_guard.c',hw/'variants/rtl8710/variant.cpp']
 if args.standalone:
@@ -69,6 +75,7 @@ if args.standalone:
  elif args.sfn_native:
   sources[-1]=ROOT/'standalone/firmware/sdk_heap_profile.c'
   sources.append(ROOT/'standalone/firmware/sdk_flash_runtime.c')
+  sources.append(ROOT/'standalone/firmware/sdk_ota_runtime.c')
  sources.append(ROOT/'standalone/firmware/core.c')
  sources.append(ROOT/'standalone/firmware/ota_guard.c')
  sources.append(ROOT/'standalone/firmware/ota_stream.c')
@@ -87,7 +94,7 @@ if args.standalone:
  sources.append(ROOT/'standalone/firmware/sdk_dhcp.c')
  sources.append(ROOT/'standalone/firmware/sdk_httpd_core.c')
  sources.append(ROOT/'standalone/firmware/sdk_worker.c')
- for name in ('meter_probe','meter_bus','meter_init','meter_convert','sdk_meter','sdk_energy','sdk_memory','sdk_relay','sdk_sse','sfn_voltage_guard','sfn_voltage_policy','sfn_child_lock','sfn_backend','sfn_schedule_meta','sfn_schedule_sync','sfn_up_protocol','sfn_up_client','sfn_final_state'):
+ for name in ('meter_probe','meter_bus','meter_init','meter_convert','sdk_meter','sdk_energy','sdk_memory','sdk_relay','sdk_sse','sfn_voltage_guard','sfn_voltage_policy','sfn_child_lock','sfn_backend','sfn_schedule_meta','sfn_schedule_sync','sfn_up_protocol','sfn_up_client','sfn_final_state','sfn_update_guard','sfn_ota_http','sfn_ota_auth','sfn_ota_policy'):
   sources.append(ROOT/'standalone/firmware'/(name+'.c'))
  if args.sfn_boot_guard:
   sources.append(ROOT/'standalone/firmware/sfn_boot_guard_core.c')
@@ -117,6 +124,7 @@ if args.standalone:
  if args.sfn_native:
   sources.append(ROOT/'standalone/firmware/sfn_vendor_wifi.c')
   sources.append(ROOT/'standalone/firmware/sdk_up_socket.c')
+  sources.append(ROOT/'standalone/firmware/sdk_remote_ota.c')
 folders=['cores/arduino','libraries/WiFi/src','system/component/common/network/httpd']
 if not args.sfn_native: folders.append('libraries/MQTTClient/src')
 for folder in folders:

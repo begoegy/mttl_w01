@@ -12,6 +12,11 @@ int main(void){
  assert(sfn_up_parse_command("up:childlock",12,&c)&&c.type==SFN_UP_CMD_CHILDLOCK_GET);
  assert(sfn_up_parse_command("up:childlock:31",15,&c)&&c.type==SFN_UP_CMD_CHILDLOCK_SET&&c.mask==31);
  assert(!sfn_up_parse_command("up:childlock:32",15,&c));assert(!sfn_up_parse_command("up:onoff:0:on",13,&c));assert(!sfn_up_parse_command("up:onoff:9:on",13,&c));assert(!sfn_up_parse_command("up:query:wifirssi\r\nup:onoff:1:on",32,&c));
+ {const char *ota="up:ota:20016:321456:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+  assert(sfn_up_parse_command(ota,strlen(ota),&c)&&c.type==SFN_UP_CMD_OTA&&c.ota_sequence==20016u&&c.ota_bytes==321456u&&c.ota_sha256[0]==0&&c.ota_sha256[31]==31);
+  assert(!sfn_up_parse_command("up:ota:10.0.0.1",15,&c));
+  assert(!sfn_up_parse_command("up:ota:20016:321456:xyz",25,&c));
+  assert(!sfn_up_parse_command("up:ota:0:321456:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",83,&c));}
  n=sfn_up_encode_bootinfo(b,sizeof(b),"lgutap","88D03907723D","0.1.55-2.1.0");assert(n&&strcmp(b,"up:bootinfo:lgutap;88D03907723D;88D03907723D;0.1.55-2.1.0;connect\r\n")==0);
  assert(sfn_up_encode_onoff_ack(b,sizeof(b),4,1)&&!strcmp(b,"up:onoff:4:on\r\n"));
  assert(sfn_up_encode_event(b,sizeof(b),0,1)&&!strcmp(b,"up:event:onoff:0:on\r\n"));

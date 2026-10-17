@@ -4,7 +4,12 @@ extern "C" {
 #include "core.h"
 #include "sdk_worker.h"
 }
+#ifdef SFN_NATIVE_UP_ONLY
+#include "sfn_native_build_config.h"
+extern "C" const char mttl_firmware_version[] = SFN_NATIVE_VERSION;
+#else
 extern "C" const char mttl_firmware_version[] = "2.0.14";
+#endif
 /* Native LG U+ OTA checks this 32-byte field at decoded file offset 0x28.
  * Keep it before executable text via the standalone linker script. */
 extern "C" const char mttl_native_ota_hardware[32]
@@ -16,6 +21,9 @@ volatile const char *mttl_version_view;
 #ifdef MTTL_OTA_TEST
 #include "ota_test_config.h"
 extern "C" const char mttl_test_profile[] = "NETWORK_OTA_TEST_RAM_SETTINGS_" MTTL_OTA_BUILD_ID;
+#elif defined(MTTL_NATIVE_OTA)
+#include "sfn_native_ota_config.h"
+extern "C" const char mttl_test_profile[] = "SFN_NATIVE_REMOTE_OTA_SAFE;SEQ=" SFN_NATIVE_OTA_SEQUENCE_TEXT;
 #else
 extern "C" const char mttl_test_profile[] = "NETWORK_TEST_NO_OTA_RAM_SETTINGS";
 #endif

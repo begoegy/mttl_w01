@@ -51,6 +51,16 @@ int sfn_up_parse_command(const char *line,size_t size,sfn_up_command *out){
     if(!strncmp(b,"up:sfn:92:",10)&&parse_item(b+10,out))return 1;
     if(!strncmp(b,"up:sfn:93:",10)&&parse_commit(b+10,out))return 1;
     if(exact(b,"up:sfn:94")){out->type=SFN_UP_CMD_SCHEDULE_STATUS;return 1;}
+    if(!strncmp(b,"up:ota:",7)){
+        const char *p=b+7,*colon=strchr(p,':'),*colon2;uint32_t sequence,bytes;unsigned i;
+        if(!colon)return 0;
+        {char nbuf[12];size_t nn=(size_t)(colon-p);const char *end;if(!nn||nn>=sizeof(nbuf))return 0;memcpy(nbuf,p,nn);nbuf[nn]=0;if(!dec_u32(nbuf,&end,&sequence)||*end||!sequence)return 0;}
+        p=colon+1;colon2=strchr(p,':');if(!colon2)return 0;
+        {char nbuf[12];size_t nn=(size_t)(colon2-p);const char *end;if(!nn||nn>=sizeof(nbuf))return 0;memcpy(nbuf,p,nn);nbuf[nn]=0;if(!dec_u32(nbuf,&end,&bytes)||*end||bytes<44u||bytes>0x6a014u)return 0;}
+        p=colon2+1;if(strlen(p)!=64)return 0;
+        for(i=0;i<32;i++){unsigned hi,lo;char x=p[i*2],y=p[i*2+1];hi=(x>='0'&&x<='9')?(unsigned)(x-'0'):(x>='a'&&x<='f')?(unsigned)(x-'a'+10):(x>='A'&&x<='F')?(unsigned)(x-'A'+10):99;lo=(y>='0'&&y<='9')?(unsigned)(y-'0'):(y>='a'&&y<='f')?(unsigned)(y-'a'+10):(y>='A'&&y<='F')?(unsigned)(y-'A'+10):99;if(hi>15||lo>15)return 0;out->ota_sha256[i]=(uint8_t)((hi<<4)|lo);}
+        out->ota_sequence=sequence;out->ota_bytes=bytes;out->type=SFN_UP_CMD_OTA;return 1;
+    }
     if(!strncmp(b,"up:childlock:",13)&&dec_mask(b+13,&mask)){out->type=SFN_UP_CMD_CHILDLOCK_SET;out->mask=(uint8_t)mask;return 1;}
     if(!strncmp(b,"up:onoff:",9)&&b[9]>='1'&&b[9]<='4'&&b[10]==':'){
         const char *v=b+11;if(exact(v,"on")||exact(v,"off")){out->type=SFN_UP_CMD_ONOFF;out->channel=(uint8_t)(b[9]-'0');out->on=(uint8_t)exact(v,"on");return 1;}
@@ -70,6 +80,7 @@ size_t sfn_up_encode_vguard_ack(char *out,size_t cap,uint32_t revision){int n;if
 size_t sfn_up_encode_clock_ack(char *out,size_t cap,uint32_t epoch){int n;n=snprintf(out,cap,"up:sfn:90:%lu:0\r\n",(unsigned long)epoch);return finish(out,cap,n);}
 size_t sfn_up_encode_schedule_commit_ack(char *out,size_t cap,uint32_t generation,unsigned count){int n;if(generation>0x7fffffffu||count>8)return 0;n=snprintf(out,cap,"up:sfn:93:%lu:%u\r\n",(unsigned long)generation,count);return finish(out,cap,n);}
 size_t sfn_up_encode_schedule_status(char *out,size_t cap,uint32_t generation,unsigned count,int clock_valid,int storage_valid){int n;unsigned meta;if(count>8)return 0;meta=count|(clock_valid?0x100u:0u)|(storage_valid?0x200u:0u);n=snprintf(out,cap,"up:sfn:94:%lu:%u\r\n",(unsigned long)generation,meta);return finish(out,cap,n);}
+size_t sfn_up_encode_ota_ack(char *out,size_t cap){return finish(out,cap,snprintf(out,cap,"up:ota:ota_ok\r\n"));}
 size_t sfn_up_encode_getinfo(char *out,size_t cap,const sfn_up_outlet x[4]){
     size_t used=0;unsigned i;uint32_t energy=0;int64_t power=0;int n;if(!out||!x||cap<16)return 0;
     n=snprintf(out,cap,"up:getinfo:");if(n<0||(size_t)n>=cap)return 0;used=(size_t)n;

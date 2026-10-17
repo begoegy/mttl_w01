@@ -36,7 +36,7 @@ async def open_lab(binary, *host_args):
     )
     assert await wait_for(lambda: service.is_online(MAC)), "connect timeout"
     session = hub.session(MAC)
-    assert session and session.firmware == "2.0.14"
+    assert session and session.firmware == "2.0.15"
     return service, hub, servers, proc, session
 
 

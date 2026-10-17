@@ -15,6 +15,7 @@
 #include "sfn_backend.h"
 #include "sfn_native_build_config.h"
 #include "sfn_vendor_wifi.h"
+#include "sdk_remote_ota.h"
 #include "flash_api.h"
 #include "device_lock.h"
 #endif
@@ -251,6 +252,7 @@ static size_t sfn_up_handle(void *context,const sfn_up_command *command,char *ou
    if(!sfn_schedule_sync_commit(&schedule_sync,command->generation,&schedule,&meta))return 0;if(config_occupied||occupied||energy_barrier_state)return 0;
    candidate=d->settings;candidate.schedule=schedule;candidate.sfn_schedule=meta;if(!storage_begin())return 0;saved=mttl_sdk_settings_save(&candidate);storage_end();if(saved!=1)return 0;
    taskENTER_CRITICAL();d->settings=candidate;++d->revision;schedule_state.primed=0;schedule_state.pending=0;taskEXIT_CRITICAL();return sfn_up_encode_schedule_commit_ack(out,cap,meta.generation,meta.count);}
+  case SFN_UP_CMD_OTA:return sfn_sdk_remote_ota_request(d->settings.sfn_backend_ipv4,command->ota_sequence,command->ota_bytes,command->ota_sha256)?sfn_up_encode_ota_ack(out,cap):0;
   case SFN_UP_CMD_SCHEDULE_STATUS:{uint64_t current;int clock_valid=mttl_time_now(&d->ntp.time,now,&current);(void)current;return sfn_up_encode_schedule_status(out,cap,d->settings.sfn_schedule.generation,d->settings.sfn_schedule.count,clock_valid,d->settings.sfn_schedule.valid);}
   default:return 0;
  }
@@ -524,7 +526,7 @@ static void worker(void *p){
         if(!identity[0]&&(life.network.state==MTTL_NET_AP||life.network.state==MTTL_NET_ONLINE)){memset(mac,0,sizeof(mac));j=0;if(wifi_get_mac_address(mac)==RTW_SUCCESS){for(k=0;mac[k]&&j<12;k++){char c=mac[k];if(c>='A'&&c<='F')c=(char)(c+32);if((c>='0'&&c<='9')||(c>='a'&&c<='f'))identity[j++]=c;}if(j!=12)identity[0]=0;}}
         mttl_device_tick(&device,identity,life.network.state==MTTL_NET_ONLINE,clock_ms(0),SFN_MQTT_IO);
 #ifdef SFN_NATIVE_UP_ONLY
-        sfn_up_service(life.network.state==MTTL_NET_ONLINE);sfn_up_physical_events();
+        sfn_up_service(life.network.state==MTTL_NET_ONLINE);sfn_sdk_remote_ota_start_if_ready(sfn_up_client_ready(&device.up));sfn_up_physical_events();
 #endif
         /* Pulse adapter has already released coils; save only a completed queue. */
         if(!device.control.fault&&!mttl_sdk_energy_relay_saved(device.control.known_mask,device.control.on_mask)&&relay_save_ready(clock_ms(0))&&(!relay_save_retry||(uint32_t)(clock_ms(0)-relay_save_attempt_at)>=5000u)&&storage_begin()){
