@@ -1,0 +1,25 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MTTL-W01 OTA Test</title>
+<style>body{font:16px system-ui;max-width:700px;margin:30px auto;padding:16px;background:#f5f7fa}label{display:block;margin:18px 0}input{display:block;width:95%;padding:10px;margin-top:8px}button{padding:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#167aaf}</style>
+<h1>MTTL-W01 2.0.12 · OTA Test</h1><a href="/">Dashboard / 대시보드</a>
+<p>Image2 BIN only / .bin 파일만 지원합니다. 부트로더·전체 덤프·FWR 파일은 올리지 마세요.</p>
+<p>실험용입니다. 저장된 Wi-Fi 설정이 있으면 재부팅 후 자동 재연결합니다. 연결 실패 시 설정 AP로 돌아갑니다. 릴레이 제어는 비활성화되어 있습니다.</p>
+<pre id="state">Checking OTA readiness…</pre>
+<form id="form"><label>Image2 .bin<input id="file" type="file" accept=".bin" required></label>
+<label>BIN SHA-256 (manifest.json)<input id="hash" minlength="64" maxlength="64" pattern="[0-9a-fA-F]{64}" required autocomplete="off"></label>
+<label>OTA token (ota-token.txt)<input id="token" type="password" minlength="32" maxlength="32" required autocomplete="off"></label>
+<button id="send" disabled>Upload &amp; reboot / 업로드 및 재부팅</button></form>
+<pre id="result"></pre><script>
+'use strict';
+const el=id=>document.getElementById(id);let ready=false;
+fetch('/api/firmware/status',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Status');return r.json();}).then(s=>{ready=s.ota_ready===true;el('state').textContent=JSON.stringify(s,null,2);el('send').disabled=!ready;}).catch(e=>el('state').textContent=String(e));
+el('form').onsubmit=async e=>{e.preventDefault();if(!ready)return;
+ const file=el('file').files[0],hash=el('hash').value.trim().toLowerCase(),token=el('token').value;
+ if(!file||file.size<44||file.size>0x6a014||!file.name.toLowerCase().endsWith('.bin')||!/^[0-9a-f]{64}$/.test(hash)||!/^[0-9a-fA-F]{32}$/.test(token)){el('result').textContent='Invalid file/hash/token';return;}
+ if(!confirm('Inactive slot will be erased. Recovery debugger is required if boot fails. Continue?\n반대 슬롯이 지워집니다. 부팅 실패 시 디버거 복구가 필요합니다. 계속할까요?'))return;
+ el('send').disabled=true;el('result').textContent='Uploading… 최대 120초. 전원을 차단하지 마세요.';
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),120000);
+ try{const r=await fetch('/api/firmware/upload',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-MTTL-SHA256':hash,'X-MTTL-OTA-Token':token},body:file,signal:controller.signal,credentials:'omit'});const text=await r.text();if(!r.ok)throw Error(text);el('result').textContent=text+'\nReconnect to MTTL-W01-SETUP, then open 192.168.4.1. OTA 완료 후 AP에 다시 접속하세요.';}
+ catch(error){el('result').textContent=String(error)+'\nResult may be uncertain after a connection loss. Do not retry blindly.';}
+ finally{clearTimeout(timer);el('token').value='';}
+};
+</script></html>
