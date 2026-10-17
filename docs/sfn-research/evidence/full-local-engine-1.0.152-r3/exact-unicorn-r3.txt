@@ -1,0 +1,104 @@
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+cold_first_clock_without_vendor_task=PASS
+lazy_state_alloc_776=PASS
+timer_create_and_1s_rearm=PASS
+durable_schedule_commit_and_timer_execution=PASS
+shared_ab_flash_voltage_schedule=PASS
+voltage_trip_force_off_and_on_veto=PASS
+voltage_safe_recovery_restore=PASS
+cold_boot_voltage_lazy_recovery_before_clock=PASS
+malloc_failure_retry=PASS
+timer_create_failure_retry=PASS
+timer_arm_failure_retry=PASS
+vendor_task_creator_disabled=PASS
+vendor_childlock_bytes_preserved=PASS
+NO_DEVICE_IO NO_OTA NO_FLASH

@@ -1,0 +1,2 @@
+EXACT_CBZ_CBNZ_TARGETS=PASS count=26 max_delta=78
+KEY_LONG_BRANCHES=PASS get_state_existing/fail/unlock use B<cond>, not CBZ/CBNZ
