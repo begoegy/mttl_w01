@@ -1,0 +1,32 @@
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+warning: applying IT instruction to more than one subsequent instruction is deprecated
+ ite eq
+ ^
+warning: deprecated instruction in IT block
+ moveq r5,#1036288
+ ^
+warning: deprecated instruction in IT block
+ movne r5,#1032192
+ ^
+exact_boot_flash_recovery=PASS
+exact_vguard_persist_and_ack=PASS
+exact_schedule_persist_and_due_execution=PASS
+exact_voltage_trip_force_off=PASS
+exact_common_relay_on_veto=PASS
+exact_safe_recovery_restore=PASS
+vendor_childlock_bytes_preserved=PASS
+NO_DEVICE_IO NO_OTA NO_FLASH

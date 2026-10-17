@@ -1,0 +1,14 @@
+test_child_lock_blocks_buttons_not_app (tests.test_full_local_engine_model.FullEngineArbitrationTest.test_child_lock_blocks_buttons_not_app) ... ok
+test_unprotected_outlet_can_turn_on_during_trip (tests.test_full_local_engine_model.FullEngineArbitrationTest.test_unprotected_outlet_can_turn_on_during_trip) ... ok
+test_voltage_trip_vetoes_all_on_sources_but_allows_off (tests.test_full_local_engine_model.FullEngineArbitrationTest.test_voltage_trip_vetoes_all_on_sources_but_allows_off) ... ok
+test_corrupt_newest_falls_back (tests.test_full_local_engine_model.FullEngineStorageTest.test_corrupt_newest_falls_back) ... ok
+test_every_interrupted_write_keeps_old_or_complete_new (tests.test_full_local_engine_model.FullEngineStorageTest.test_every_interrupted_write_keeps_old_or_complete_new) ... ok
+test_exact_image_size_supports_38_events (tests.test_full_local_engine_model.FullEngineStorageTest.test_exact_image_size_supports_38_events) ... ok
+test_roundtrip_keeps_voltage_and_schedule_together (tests.test_full_local_engine_model.FullEngineStorageTest.test_roundtrip_keeps_voltage_and_schedule_together) ... ok
+test_schedule_update_preserves_voltage (tests.test_full_local_engine_model.FullEngineStorageTest.test_schedule_update_preserves_voltage) ... ok
+test_voltage_update_preserves_schedules (tests.test_full_local_engine_model.FullEngineStorageTest.test_voltage_update_preserves_schedules) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.010s
+
+OK

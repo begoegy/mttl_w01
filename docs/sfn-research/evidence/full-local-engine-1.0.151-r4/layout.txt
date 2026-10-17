@@ -1,0 +1,12 @@
+task 248 0x10009914 0x10009a0c
+memory 32 0x1001600c 0x1001602c
+main 708 0x1001eb6c 0x1001ee30
+ack 54 0x1001ee5c 0x1001ee92
+vguard 190 0x1001606a 0x10016128
+legacy 604 0x100233d6 0x10023632
+relay 54 0x100166dc 0x10016712
+hook 4 0x10012918 0x1001291c
+relay_patch 4 0x1001ab42 0x1001ab46
+wrapper_patch 2 0x10023686 0x10023688
+{'handler_addr': '0x1001ec32', 'relay_addr': '0x100166dc', 'gate_addr': '0x100099a0', 'valid_addr': '0x1001edde', 'policy_addr': '0x100235aa', 'persist_addr': '0x100233d6', 'hook_addr': '0x1002343c', 'seal_addr': '0x100099ec'}
+layout=PASS

@@ -1,0 +1,2 @@
+Image(format='LG U+ FWR (XOR)', size=327944, body_size=327924, entry=268460145, checksum=33057254, sha256='44e46fa430d99492e37ca0ad50fdec3d8eefb7a8d4ac8abf5f8344fc05f4c36b', version_candidates=('0.1.55', '1.0.151'))
+INDEPENDENT_VALIDATOR_R4=PASS
